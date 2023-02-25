@@ -11,7 +11,9 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include "SPIFFS.h"
-// #include <FS.h>
+
+#include <WiFiMulti.h>
+#include "ESPmDNS.h"
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -19,28 +21,31 @@ AsyncWebServer server(80);
 // Search for parameter in HTTP POST request
 const char *PARAM_INPUT_1 = "ssid";
 const char *PARAM_INPUT_2 = "pass";
-const char *PARAM_INPUT_3 = "ip";
-const char *PARAM_INPUT_4 = "gateway";
+const char *PARAM_INPUT_3 = "location";
+// const char *PARAM_INPUT_3 = "ip";
+// const char *PARAM_INPUT_4 = "gateway";
 
 // Variables to save values from HTML form
 String ssid;
 String pass;
-String ip;
-String gateway;
+String locationName;
+// String ip;
+// String gateway;
 
 // File paths to save input values permanently
 const char *ssidPath = "/ssid.txt";
 const char *passPath = "/pass.txt";
-const char *ipPath = "/ip.txt";
-const char *gatewayPath = "/gateway.txt";
+const char *locationNamePath = "/location.txt";
+// const char *ipPath = "/ip.txt";
+// const char *gatewayPath = "/gateway.txt";
 
-IPAddress localIP;
+// IPAddress localIP;
 // IPAddress localIP(192, 168, 1, 200); // hardcoded
 
 // Set your Gateway IP address
-IPAddress localGateway;
+// IPAddress localGateway;
 // IPAddress localGateway(192, 168, 1, 1); //hardcoded
-IPAddress subnet(255, 255, 0, 0);
+// IPAddress subnet(255, 255, 0, 0);
 
 // Timer variables
 unsigned long previousMillis = 0;
@@ -51,6 +56,13 @@ const int ledPin = 2;
 // Stores LED state
 
 String ledState;
+
+// no good reason for these to be directives
+#define MDNS_DEVICE_NAME "esp32-climate-sensor-"
+#define SERVICE_NAME "climate-http"
+#define SERVICE_PROTOCOL "tcp"
+#define SERVICE_PORT 80
+// #define LOCATION "SandBBedroom"
 
 // Initialize SPIFFS
 void initSPIFFS()
@@ -107,23 +119,41 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
 // Initialize WiFi
 bool initWiFi()
 {
-  if (ssid == "" || ip == "")
+  // if (ssid == "" || ip == "")
+  if (ssid == "")
   {
-    Serial.println("Undefined SSID or IP address.");
+    // Serial.println("Undefined SSID or IP address.");
+    Serial.println("Undefined SSID.");
     return false;
   }
 
+  // WiFi.mode(WIFI_STA);
+  // localIP.fromString(ip.c_str());
+  // localGateway.fromString(gateway.c_str());
+
+  // Copied from Dec'22 working at saltmeadow to connect to strongest signal of mesh network
   WiFi.mode(WIFI_STA);
-  localIP.fromString(ip.c_str());
-  localGateway.fromString(gateway.c_str());
-
-  if (!WiFi.config(localIP, localGateway, subnet))
+  // Add list of wifi networks
+  WiFiMulti wifiMulti;
+  wifiMulti.addAP(ssid.c_str(), pass.c_str());
+  WiFi.scanNetworks();
+  // Connect to Wi-Fi using wifiMulti (connects to the SSID with strongest connection)
+  Serial.println("Connecting Wifi; looking for strongest mesh node...");
+  if (wifiMulti.run() == WL_CONNECTED)
   {
-    Serial.println("STA Failed to configure");
-    return false;
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
   }
-  WiFi.begin(ssid.c_str(), pass.c_str());
-  Serial.println("Connecting to WiFi...");
+
+  // if (!WiFi.config(localIP, localGateway, subnet))
+  // {
+  //   Serial.println("STA Failed to configure");
+  //   return false;
+  // }
+  // WiFi.begin(ssid.c_str(), pass.c_str());
+  // Serial.println("Connecting to WiFi...");
 
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
@@ -137,11 +167,56 @@ bool initWiFi()
       return false;
     }
   }
-
-  Serial.println(WiFi.localIP());
   return true;
 }
 
+/* Append a semi-unique id to the name template */
+char *MakeMine(const char *NameTemplate)
+{
+  // uint16_t uChipId = GetDeviceId();
+  // String Result = String(NameTemplate) + String(uChipId, HEX);
+  String Result = String(NameTemplate) + String(locationName);
+
+  char *tab2 = new char[Result.length() + 1];
+  strcpy(tab2, Result.c_str());
+
+  return tab2;
+}
+
+void AdvertiseServices()
+{
+
+  char *MyName = MakeMine(MDNS_DEVICE_NAME);
+  if (MDNS.begin(MyName))
+  {
+    Serial.println(F("mDNS responder started"));
+    Serial.print(F("I am: "));
+    Serial.println(MyName);
+
+    // Add service to MDNS-SD
+    MDNS.addService(SERVICE_NAME, SERVICE_PROTOCOL, SERVICE_PORT);
+  }
+  else
+  {
+    while (1)
+    {
+      Serial.println(F("Error setting up MDNS responder"));
+      delay(1000);
+    }
+  }
+}
+
+bool initMicroDNS()
+{
+  if (!MDNS.begin(MDNS_DEVICE_NAME))
+  {
+    Serial.println("Error starting mDNS");
+    return false;
+  }
+
+  AdvertiseServices();
+  return true;
+}
 // Replaces placeholder with LED state value
 String processor(const String &var)
 {
@@ -174,15 +249,17 @@ void setup()
   // Load values saved in SPIFFS
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
-  ip = readFile(SPIFFS, ipPath);
-  gateway = readFile(SPIFFS, gatewayPath);
+  locationName = readFile(SPIFFS, locationNamePath);
+  // ip = readFile(SPIFFS, ipPath);
+  // gateway = readFile(SPIFFS, gatewayPath);
   Serial.println(ssid);
   Serial.println(pass);
-  Serial.println(ip);
-  Serial.println(gateway);
+  Serial.println(locationName);
+  // Serial.println(ip);
+  // Serial.println(gateway);
 
   if (initWiFi())
-  {
+  { // Station Mode
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
@@ -202,7 +279,7 @@ void setup()
     server.begin();
   }
   else
-  {
+  { // This path is meant to run only upon initial setup
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
@@ -240,26 +317,39 @@ void setup()
             // Write file to save value
             writeFile(SPIFFS, passPath, pass.c_str());
           }
-          // HTTP POST ip value
+          // HTTP POST location value
           if (p->name() == PARAM_INPUT_3) {
-            ip = p->value().c_str();
-            Serial.print("IP Address set to: ");
-            Serial.println(ip);
+            locationName = p->value().c_str();
+            Serial.print("Location (for mDNS Hostname): ");
+            Serial.println(pass);
             // Write file to save value
-            writeFile(SPIFFS, ipPath, ip.c_str());
+            writeFile(SPIFFS, locationNamePath, pass.c_str());
           }
-          // HTTP POST gateway value
-          if (p->name() == PARAM_INPUT_4) {
-            gateway = p->value().c_str();
-            Serial.print("Gateway set to: ");
-            Serial.println(gateway);
-            // Write file to save value
-            writeFile(SPIFFS, gatewayPath, gateway.c_str());
-          }
+
+
+
+          // // HTTP POST ip value
+          // if (p->name() == PARAM_INPUT_3) {
+          //   ip = p->value().c_str();
+          //   Serial.print("IP Address set to: ");
+          //   Serial.println(ip);
+          //   // Write file to save value
+          //   writeFile(SPIFFS, ipPath, ip.c_str());
+          // }
+          // // HTTP POST gateway value
+          // if (p->name() == PARAM_INPUT_4) {
+          //   gateway = p->value().c_str();
+          //   Serial.print("Gateway set to: ");
+          //   Serial.println(gateway);
+          //   // Write file to save value
+          //   writeFile(SPIFFS, gatewayPath, gateway.c_str());
+          // }
+
           //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
       }
-      request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
+      // request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
+      request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(3000);
       ESP.restart(); });
     server.begin();
