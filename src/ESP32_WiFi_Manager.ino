@@ -127,10 +127,6 @@ bool initWiFi()
     return false;
   }
 
-  // WiFi.mode(WIFI_STA);
-  // localIP.fromString(ip.c_str());
-  // localGateway.fromString(gateway.c_str());
-
   // Copied from Dec'22 working at saltmeadow to connect to strongest signal of mesh network
   WiFi.mode(WIFI_STA);
   // Add list of wifi networks
@@ -146,14 +142,6 @@ bool initWiFi()
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
   }
-
-  // if (!WiFi.config(localIP, localGateway, subnet))
-  // {
-  //   Serial.println("STA Failed to configure");
-  //   return false;
-  // }
-  // WiFi.begin(ssid.c_str(), pass.c_str());
-  // Serial.println("Connecting to WiFi...");
 
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
@@ -260,6 +248,9 @@ void setup()
 
   if (initWiFi())
   { // Station Mode
+
+    initMicroDNS();
+
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
@@ -321,9 +312,9 @@ void setup()
           if (p->name() == PARAM_INPUT_3) {
             locationName = p->value().c_str();
             Serial.print("Location (for mDNS Hostname): ");
-            Serial.println(pass);
+            Serial.println(locationName);
             // Write file to save value
-            writeFile(SPIFFS, locationNamePath, pass.c_str());
+            writeFile(SPIFFS, locationNamePath, locationName.c_str());
           }
 
 
