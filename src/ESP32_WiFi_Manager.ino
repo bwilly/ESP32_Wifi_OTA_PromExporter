@@ -15,6 +15,8 @@
 #include <WiFiMulti.h>
 #include "ESPmDNS.h"
 
+#include <AsyncElegantOTA.h>
+
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
@@ -267,6 +269,10 @@ void setup()
               {
       digitalWrite(ledPin, LOW);
       request->send(SPIFFS, "/index.html", "text/html", false, processor); });
+
+    // uses path like server.on("/update")
+    AsyncElegantOTA.begin(&server);
+
     server.begin();
   }
   else
