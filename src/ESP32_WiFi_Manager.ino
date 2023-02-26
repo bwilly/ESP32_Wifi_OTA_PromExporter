@@ -15,6 +15,24 @@
 #include <WiFiMulti.h>
 #include "ESPmDNS.h"
 
+#include <DHT_U.h>
+
+// no good reason for these to be directives
+#define MDNS_DEVICE_NAME "esp32-climate-sensor-"
+#define SERVICE_NAME "climate-http"
+#define SERVICE_PROTOCOL "tcp"
+#define SERVICE_PORT 80
+// #define LOCATION "SandBBedroom"
+
+#define DHTPIN 23 // Digital pin connected to the DHT sensor
+
+// Uncomment the type of sensor in use:
+// #define DHTTYPE    DHT11     // DHT 11
+#define DHTTYPE DHT22 // DHT 22 (AM2302)
+// #define DHTTYPE    DHT21     // DHT 21 (AM2301)
+
+DHT dht(DHTPIN, DHTTYPE);
+
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
@@ -56,13 +74,6 @@ const int ledPin = 2;
 // Stores LED state
 
 String ledState;
-
-// no good reason for these to be directives
-#define MDNS_DEVICE_NAME "esp32-climate-sensor-"
-#define SERVICE_NAME "climate-http"
-#define SERVICE_PROTOCOL "tcp"
-#define SERVICE_PORT 80
-// #define LOCATION "SandBBedroom"
 
 // Initialize SPIFFS
 void initSPIFFS()
@@ -158,6 +169,45 @@ bool initWiFi()
   return true;
 }
 
+// Prometheus Exporter
+
+char buffer[1024];
+
+// *****************
+//  Prometheus Exporter Format Dec9-2022
+// *****************
+// https://github.com/KireinaHoro/esp32-sensor-exporter/blob/master/src/main.cpp
+//
+// void send_metrics(WiFiClient &client) {
+char *readAndGeneratePrometheusExport(const char *location)
+{
+  memset(buffer, 0, 1);
+
+  strncat(buffer, "# HELP environ_tempt Environment temperature (in C).\n", 60);
+  strncat(buffer, "# TYPE environ_tempt gauge\n", 30);
+
+  strncat(buffer, "environ_tempt{location=\"", 50);
+  strncat(buffer, location, 20);
+  strncat(buffer, "\"}", 3);
+
+  strncat(buffer, " ", 2);
+  strncat(buffer, readDHTTemperature().c_str(), 6);
+  strncat(buffer, "\n", 2);
+
+  strncat(buffer, "# HELP environ_humidity Environment relative humidity (in percentage).\n", 99);
+  strncat(buffer, "# TYPE environ_humidity gauge\n", 32);
+
+  strncat(buffer, "environ_humidity{location=\"", 50);
+  strncat(buffer, location, 20);
+  strncat(buffer, "\"}", 3);
+
+  strncat(buffer, " ", 2);
+  strncat(buffer, readDHTHumidity().c_str(), 6);
+  strncat(buffer, "\n", 3);
+
+  return buffer;
+}
+
 /* Append a semi-unique id to the name template */
 char *MakeMine(const char *NameTemplate)
 {
@@ -223,6 +273,18 @@ String processor(const String &var)
   return String();
 }
 
+// Replaces placeholder with DHT values
+// String processor(const String& var){
+//   //Serial.println(var);
+//   if(var == "TEMPERATURE"){
+//     return readDHTTemperature();
+//   }
+//   else if(var == "HUMIDITY"){
+//     return readDHTHumidity();
+//   }
+//   return String();
+// }
+
 void setup()
 {
   // Serial port for debugging purposes
@@ -267,10 +329,14 @@ void setup()
               {
       digitalWrite(ledPin, LOW);
       request->send(SPIFFS, "/index.html", "text/html", false, processor); });
+
+    server.on("/metrics", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", readAndGeneratePrometheusExport(MakeMine(MDNS_DEVICE_NAME))); }); // prometheus
+
     server.begin();
   }
-  else
-  { // This path is meant to run only upon initial setup
+  else // SETUP
+  {    // This path is meant to run only upon initial setup
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
@@ -349,4 +415,41 @@ void setup()
 
 void loop()
 {
+}
+
+// DHT Temperature
+String readDHTTemperature()
+{
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  // Read temperature as Celsius (the default)
+  float t = dht.readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  // float t = dht.readTemperature(true);
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(t))
+  {
+    Serial.println("Failed to read from DHT sensor!");
+    return "--";
+  }
+  else
+  {
+    Serial.println(t);
+    return String(t);
+  }
+}
+
+String readDHTHumidity()
+{
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float h = dht.readHumidity();
+  if (isnan(h))
+  {
+    Serial.println("Failed to read from DHT sensor!");
+    return "--";
+  }
+  else
+  {
+    Serial.println(h);
+    return String(h);
+  }
 }
