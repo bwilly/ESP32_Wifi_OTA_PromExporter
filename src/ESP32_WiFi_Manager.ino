@@ -17,6 +17,8 @@
 
 #include <DHT_U.h>
 
+#include <AsyncElegantOTA.h>
+
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
 #define SERVICE_NAME "climate-http"
@@ -330,8 +332,12 @@ void setup()
       digitalWrite(ledPin, LOW);
       request->send(SPIFFS, "/index.html", "text/html", false, processor); });
 
+    // Route to Prometheus Metrics Exporter
     server.on("/metrics", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", readAndGeneratePrometheusExport(MakeMine(MDNS_DEVICE_NAME))); }); // prometheus
+              { request->send(200, "text/html", readAndGeneratePrometheusExport(MakeMine(MDNS_DEVICE_NAME))); });
+
+    // uses path like server.on("/update")
+    AsyncElegantOTA.begin(&server);
 
     server.begin();
   }
