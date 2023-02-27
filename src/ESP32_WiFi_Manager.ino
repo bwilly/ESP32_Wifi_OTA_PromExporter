@@ -248,11 +248,11 @@ void AdvertiseServices()
 
 bool initDNS()
 {
-  if (!MDNS.begin(MDNS_DEVICE_NAME))
-  {
-    Serial.println("Error starting mDNS");
-    return false;
-  }
+  // if (!MDNS.begin(MDNS_DEVICE_NAME))
+  // {
+  //   Serial.println("Error starting mDNS");
+  //   return false;
+  // }
 
   AdvertiseServices();
   return true;
