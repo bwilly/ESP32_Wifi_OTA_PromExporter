@@ -48,7 +48,7 @@ const char *PARAM_INPUT_3 = "location";
 // Variables to save values from HTML form
 String ssid;
 String pass;
-String locationName;
+String locationName; // used during regular operation, not only setup
 // String ip;
 // String gateway;
 
@@ -334,7 +334,10 @@ void setup()
 
     // Route to Prometheus Metrics Exporter
     server.on("/metrics", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", readAndGeneratePrometheusExport(MakeMine(MDNS_DEVICE_NAME))); });
+              { request->send(200, "text/html", readAndGeneratePrometheusExport(locationName.c_str())); });
+
+    server.on("/devicename", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", MakeMine(MDNS_DEVICE_NAME)); });
 
     // uses path like server.on("/update")
     AsyncElegantOTA.begin(&server);
