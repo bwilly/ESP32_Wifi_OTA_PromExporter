@@ -246,7 +246,7 @@ void AdvertiseServices()
   }
 }
 
-bool initMicroDNS()
+bool initDNS()
 {
   if (!MDNS.begin(MDNS_DEVICE_NAME))
   {
@@ -313,7 +313,7 @@ void setup()
   if (initWiFi())
   { // Station Mode
 
-    initMicroDNS();
+    initDNS();
 
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -421,6 +421,8 @@ void setup()
 
 void loop()
 {
+  // does this need to be here? I didn't use it, here, on the new master project. maybe it was only needed for the non-async web server? bwilly Feb26'23
+  // server.handleClient();
 }
 
 // DHT Temperature
