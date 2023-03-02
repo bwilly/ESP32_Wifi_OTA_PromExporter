@@ -68,8 +68,11 @@ const char *locationNamePath = "/location.txt";
 // IPAddress subnet(255, 255, 0, 0);
 
 // Timer variables
+// todo: can combine interval and delay. each is from copy/paste. one solves initial connect, the other is for lost connection retry
 unsigned long previousMillis = 0;
 const long interval = 10000; // interval to wait for Wi-Fi connection (milliseconds)
+unsigned long previous_time = 0;
+unsigned long reconnect_delay = 180000; // 3-min delay
 
 // Set LED GPIO
 const int ledPin = 2;
@@ -154,6 +157,8 @@ bool initWiFi()
     Serial.println("WiFi connected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+    Serial.println("Connected to BSSID: ");
+    Serial.println(WiFi.BSSIDstr());
   }
 
   unsigned long currentMillis = millis();
@@ -339,6 +344,62 @@ void setup()
     server.on("/devicename", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", MakeMine(MDNS_DEVICE_NAME)); });
 
+    server.on("/bssid", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", WiFi.BSSIDstr()); });
+
+    server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", readDHTTemperature().c_str()); });
+
+    // copy/paste from setup section for AP -- changing URL path
+    // todo: consolidate this copied code
+    server.on("/manage", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
+
+    server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", "preAlpha1"); });
+
+    server.serveStatic("/", SPIFFS, "/");
+
+    // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root /
+    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
+              {
+      int params = request->params();
+      for(int i=0;i<params;i++){
+        AsyncWebParameter* p = request->getParam(i);
+        if(p->isPost()){
+          // HTTP POST ssid value
+          if (p->name() == PARAM_INPUT_1) {
+            ssid = p->value().c_str();
+            Serial.print("SSID set to: ");
+            Serial.println(ssid);
+            // Write file to save value
+            writeFile(SPIFFS, ssidPath, ssid.c_str());
+          }
+          // HTTP POST pass value
+          if (p->name() == PARAM_INPUT_2) {
+            pass = p->value().c_str();
+            Serial.print("Password set to: ");
+            Serial.println(pass);
+            // Write file to save value
+            writeFile(SPIFFS, passPath, pass.c_str());
+          }
+          // HTTP POST location value
+          if (p->name() == PARAM_INPUT_3) {
+            locationName = p->value().c_str();
+            Serial.print("Location (for mDNS Hostname and Prometheus): ");
+            Serial.println(locationName);
+            // Write file to save value
+            writeFile(SPIFFS, locationNamePath, locationName.c_str());
+          }
+        }
+      }
+      // request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
+      request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
+      delay(3000);
+      ESP.restart(); });
+
+    // END copy/paste
+
     // uses path like server.on("/update")
     AsyncElegantOTA.begin(&server);
 
@@ -386,32 +447,11 @@ void setup()
           // HTTP POST location value
           if (p->name() == PARAM_INPUT_3) {
             locationName = p->value().c_str();
-            Serial.print("Location (for mDNS Hostname): ");
+            Serial.print("Location (for mDNS Hostname and Prometheus): ");
             Serial.println(locationName);
             // Write file to save value
             writeFile(SPIFFS, locationNamePath, locationName.c_str());
           }
-
-
-
-          // // HTTP POST ip value
-          // if (p->name() == PARAM_INPUT_3) {
-          //   ip = p->value().c_str();
-          //   Serial.print("IP Address set to: ");
-          //   Serial.println(ip);
-          //   // Write file to save value
-          //   writeFile(SPIFFS, ipPath, ip.c_str());
-          // }
-          // // HTTP POST gateway value
-          // if (p->name() == PARAM_INPUT_4) {
-          //   gateway = p->value().c_str();
-          //   Serial.print("Gateway set to: ");
-          //   Serial.println(gateway);
-          //   // Write file to save value
-          //   writeFile(SPIFFS, gatewayPath, gateway.c_str());
-          // }
-
-          //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
       }
       // request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
@@ -426,6 +466,19 @@ void loop()
 {
   // does this need to be here? I didn't use it, here, on the new master project. maybe it was only needed for the non-async web server? bwilly Feb26'23
   // server.handleClient();
+
+  unsigned long current_time = millis(); // number of milliseconds since the upload
+
+  // checking for WIFI connection
+  if ((WiFi.status() != WL_CONNECTED) && (current_time - previous_time >= reconnect_delay))
+  {
+    Serial.print(millis());
+    Serial.println("Reconnecting to WIFI network by restarting to leverage best AP algorithm");
+    // WiFi.disconnect();
+    // WiFi.reconnect();
+    ESP.restart();
+    previous_time = current_time;
+  }
 }
 
 // DHT Temperature
