@@ -27,6 +27,7 @@
 // #define LOCATION "SandBBedroom"
 
 #define DHTPIN 23 // Digital pin connected to the DHT sensor
+// TODO: allow pin and sensor type to be configurable
 
 // Uncomment the type of sensor in use:
 // #define DHTTYPE    DHT11     // DHT 11
@@ -410,7 +411,7 @@ void setup()
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
-    WiFi.softAP("ESP-WIFI-MANAGER", NULL);
+    WiFi.softAP("ESP-WIFI-MANAGER", "saltmeadow");
 
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
