@@ -19,6 +19,8 @@
 
 #include <AsyncElegantOTA.h>
 
+#include <string>
+
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
 #define SERVICE_NAME "climate-http"
@@ -26,7 +28,8 @@
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
 
-#define DHTPIN 23 // Digital pin connected to the DHT sensor
+// #define DHTPIN 23 // Digital pin connected to the DHT sensor
+// const int DHTPIN;
 // TODO: allow pin and sensor type to be configurable
 
 // Uncomment the type of sensor in use:
@@ -34,7 +37,8 @@
 #define DHTTYPE DHT22 // DHT 22 (AM2302)
 // #define DHTTYPE    DHT21     // DHT 21 (AM2301)
 
-DHT dht(DHTPIN, DHTTYPE);
+// DHT dht(DHTPIN, DHTTYPE);
+DHT *dht = nullptr; // global pointer declaration
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -43,6 +47,7 @@ AsyncWebServer server(80);
 const char *PARAM_INPUT_1 = "ssid";
 const char *PARAM_INPUT_2 = "pass";
 const char *PARAM_INPUT_3 = "location";
+const char *PARAM_INPUT_4 = "pinDht";
 // const char *PARAM_INPUT_3 = "ip";
 // const char *PARAM_INPUT_4 = "gateway";
 
@@ -50,6 +55,7 @@ const char *PARAM_INPUT_3 = "location";
 String ssid;
 String pass;
 String locationName; // used during regular operation, not only setup
+String pinDht;
 // String ip;
 // String gateway;
 
@@ -57,6 +63,7 @@ String locationName; // used during regular operation, not only setup
 const char *ssidPath = "/ssid.txt";
 const char *passPath = "/pass.txt";
 const char *locationNamePath = "/location.txt";
+const char *pinDhtPath = "/pindht.txt";
 // const char *ipPath = "/ip.txt";
 // const char *gatewayPath = "/gateway.txt";
 
@@ -308,13 +315,26 @@ void setup()
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
   locationName = readFile(SPIFFS, locationNamePath);
+  pinDht = readFile(SPIFFS, pinDhtPath);
   // ip = readFile(SPIFFS, ipPath);
   // gateway = readFile(SPIFFS, gatewayPath);
   Serial.println(ssid);
   Serial.println(pass);
   Serial.println(locationName);
+  Serial.println(pinDht);
   // Serial.println(ip);
   // Serial.println(gateway);
+
+  if (pinDht != nullptr)
+  {
+    Serial.println("About to convert pin to int.");
+    int _pinDht = std::stoi(pinDht.c_str());
+    dht = new DHT(_pinDht, DHTTYPE);
+  }
+  else
+  {
+    Serial.println("Cannot configure DHT because pin not defined.");
+  }
 
   if (initWiFi())
   { // Station Mode
@@ -357,7 +377,10 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", "preAlpha1"); });
+              { request->send(200, "text/html", "preAlpha2"); });
+
+    server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", pinDht); });
 
     server.serveStatic("/", SPIFFS, "/");
 
@@ -391,6 +414,14 @@ void setup()
             Serial.println(locationName);
             // Write file to save value
             writeFile(SPIFFS, locationNamePath, locationName.c_str());
+          }
+          // HTTP POST location value
+          if (p->name() == PARAM_INPUT_4) {
+            pinDht = p->value().c_str();
+            Serial.print("Pin (for DHT-22): ");
+            Serial.println(pinDht);
+            // Write file to save value
+            writeFile(SPIFFS, pinDhtPath, pinDht.c_str());
           }
         }
       }
@@ -453,6 +484,14 @@ void setup()
             // Write file to save value
             writeFile(SPIFFS, locationNamePath, locationName.c_str());
           }
+          // HTTP POST location value
+          if (p->name() == PARAM_INPUT_4) {
+            pinDht = p->value().c_str();
+            Serial.print("Pin (for DHT-22): ");
+            Serial.println(pinDht);
+            // Write file to save value
+            writeFile(SPIFFS, pinDhtPath, pinDht.c_str());
+          }
         }
       }
       // request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
@@ -487,7 +526,7 @@ String readDHTTemperature()
 {
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
   // Read temperature as Celsius (the default)
-  float t = dht.readTemperature();
+  float t = dht->readTemperature();
   // Read temperature as Fahrenheit (isFahrenheit = true)
   // float t = dht.readTemperature(true);
   // Check if any reads failed and exit early (to try again).
@@ -506,7 +545,7 @@ String readDHTTemperature()
 String readDHTHumidity()
 {
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  float h = dht.readHumidity();
+  float h = dht->readHumidity();
   if (isnan(h))
   {
     Serial.println("Failed to read from DHT sensor!");
