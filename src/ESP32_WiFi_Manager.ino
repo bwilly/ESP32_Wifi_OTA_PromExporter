@@ -1,4 +1,23 @@
+
 /*********
+// Brian Willy
+// Climate Sensor
+// Prometheus Exporter
+// Copywrite 2022-2023
+// Copyright 2022-2023
+
+// Unstable Wifi post network/wifi failure
+// Only supports DHT22 Sensor
+
+// Configurable:
+// Location as mDNS Name Suffix
+// Wifi
+// ESP Pin
+*/
+
+/*********
+ *
+ * Thanks to
   Rui Santos
   Complete instructions at https://RandomNerdTutorials.com/esp32-wi-fi-manager-asyncwebserver/
 
