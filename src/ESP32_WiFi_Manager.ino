@@ -7,7 +7,14 @@
 // Copyright 2022-2023
 
 // Unstable Wifi post network/wifi failure
+      - plan for fix here is to switch base wifi platform code away from Rui Santos to
+
 // Only supports DHT22 Sensor
+
+Immediate need for DSB18b20 Sensor support and multi names for multi sensor.
+I guess that will be accomplished via the hard coded promexporter names.
+Must be configurable.
+With ability to map DSB ID to a name, such as raw water in, post air cooler, post heat exchanger, etc
 
 // Configurable:
 // Location as mDNS Name Suffix
@@ -35,6 +42,8 @@
 #include "ESPmDNS.h"
 
 #include <DHT_U.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 #include <AsyncElegantOTA.h>
 
@@ -58,6 +67,21 @@
 
 // DHT dht(DHTPIN, DHTTYPE);
 DHT *dht = nullptr; // global pointer declaration
+
+// DS18b20
+// Data wire is plugged into port 15 on the ESP32
+#define ONE_WIRE_BUS 23
+
+// Setup a oneWire instance to communicate with any OneWire devices
+OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass our oneWire reference to Dallas Temperature.
+DallasTemperature sensors(&oneWire);
+
+float tempSensor1, tempSensor2, tempSensor3;
+uint8_t sensor1[8] = {0x28, 0xEE, 0xD5, 0x64, 0x1A, 0x16, 0x02, 0xEC};
+uint8_t sensor2[8] = {0x28, 0x61, 0x64, 0x12, 0x3C, 0x7C, 0x2F, 0x27};
+uint8_t sensor3[8] = {0x28, 0x61, 0x64, 0x12, 0x3F, 0xFD, 0x80, 0xC6};
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -319,6 +343,100 @@ String processor(const String &var)
 //   return String();
 // }
 
+// variable to hold device addresses
+DeviceAddress Thermometer;
+
+int deviceCount = 0;
+
+String printDS18b20(void)
+{
+  String output = "";
+
+  sensors.begin();
+
+  output += "Locating devices...\n";
+  output += "Found ";
+  deviceCount = sensors.getDeviceCount();
+  output += String(deviceCount, DEC);
+  output += " devices.\n\n";
+  output += "Printing addresses...\n";
+
+  for (int i = 0; i < deviceCount; i++)
+  {
+    output += "Sensor ";
+    output += String(i + 1);
+    output += " : ";
+    sensors.getAddress(Thermometer, i);
+    // Assuming printAddress() returns a formatted string
+    output += printAddressAsString(Thermometer);
+  }
+
+  return output;
+}
+
+void setupDS18b20(void)
+{
+  // start serial port
+  // Serial.begin(115200);
+
+  // Start up the library
+  sensors.begin();
+
+  // locate devices on the bus
+  Serial.println("Locating devices...");
+  Serial.print("Found ");
+  deviceCount = sensors.getDeviceCount();
+  Serial.print(deviceCount, DEC);
+  Serial.println(" devices.");
+  Serial.println("");
+
+  Serial.println("Printing addresses...");
+  for (int i = 0; i < deviceCount; i++)
+  {
+    Serial.print("Sensor ");
+    Serial.print(i + 1);
+    Serial.print(" : ");
+    sensors.getAddress(Thermometer, i);
+    printAddress(Thermometer);
+  }
+
+  // Output
+  // Printing addresses...
+  // Sensor 1 : 0x28, 0xA0, 0x7B, 0x49, 0xF6, 0xDE, 0x3C, 0xE9
+  // Sensor 2 : 0x28, 0x08, 0xD3, 0x49, 0xF6, 0x3C, 0x3C, 0xFD
+  // Sensor 3 : 0x28, 0xC5, 0xE1, 0x49, 0xF6, 0x50, 0x3C, 0x38
+}
+
+void printAddress(DeviceAddress deviceAddress)
+{
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    Serial.print("0x");
+    if (deviceAddress[i] < 0x10)
+      Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+    if (i < 7)
+      Serial.print(", ");
+  }
+  Serial.println("");
+}
+
+String printAddressAsString(DeviceAddress deviceAddress)
+{
+  String addressString = "";
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    addressString += "0x";
+    if (deviceAddress[i] < 0x10)
+      addressString += "0";
+    addressString += String(deviceAddress[i], HEX);
+    if (i < 7)
+      addressString += ", ";
+  }
+  addressString += "\n";
+  return addressString;
+}
+
 void setup()
 {
   // Serial port for debugging purposes
@@ -396,10 +514,15 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", "preAlpha2"); });
+              { request->send(200, "text/html", "preAlpha3"); });
 
     server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", pinDht); });
+
+    server.on("/onewire", HTTP_GET, [](AsyncWebServerRequest *request)
+              {           
+                String result = printDS18b20();                     
+                request->send(200, "text/html", result); });
 
     server.serveStatic("/", SPIFFS, "/");
 
@@ -458,6 +581,7 @@ void setup()
   }
   else // SETUP
   {    // This path is meant to run only upon initial setup
+
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
