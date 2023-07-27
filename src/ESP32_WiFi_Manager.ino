@@ -79,9 +79,9 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 float tempSensor1, tempSensor2, tempSensor3;
-uint8_t sensor1[8] = {0x28, 0xEE, 0xD5, 0x64, 0x1A, 0x16, 0x02, 0xEC};
-uint8_t sensor2[8] = {0x28, 0x61, 0x64, 0x12, 0x3C, 0x7C, 0x2F, 0x27};
-uint8_t sensor3[8] = {0x28, 0x61, 0x64, 0x12, 0x3F, 0xFD, 0x80, 0xC6};
+uint8_t sensor1[8] = {0x28, 0xa0, 0x7b, 0x49, 0xf6, 0xde, 0x3c, 0xe9};
+uint8_t sensor2[8] = {0x28, 0x08, 0xd3, 0x49, 0xf6, 0x3c, 0x3c, 0xfd};
+uint8_t sensor3[8] = {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38};
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -524,6 +524,15 @@ void setup()
                 String result = printDS18b20();                     
                 request->send(200, "text/html", result); });
 
+    server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
+              {           
+                sensors.requestTemperatures();
+                tempSensor1 = sensors.getTempC(sensor1); // Gets the values of the temperature
+                tempSensor2 = sensors.getTempC(sensor2); // Gets the values of the temperature
+                tempSensor3 = sensors.getTempC(sensor3); // Gets the values of the temperature          
+                request->send(200, "text/html", SendHTML(tempSensor1, tempSensor2, tempSensor3)); });
+    // request->send(200, "text/html", SendHTMLxxx()); });
+
     server.serveStatic("/", SPIFFS, "/");
 
     // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root /
@@ -699,4 +708,63 @@ String readDHTHumidity()
     Serial.println(h);
     return String(h);
   }
+}
+
+String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
+{
+  Serial.println(tempSensor1);
+
+  String ptr = "<!DOCTYPE html> <html>\n";
+  ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  ptr += "<title>ESP32 Temperature Monitor</title>\n";
+  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
+  ptr += "body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;}\n";
+  ptr += "p {font-size: 24px;color: #444444;margin-bottom: 10px;}\n";
+  ptr += "</style>\n";
+  ptr += "</head>\n";
+  ptr += "<body>\n";
+  ptr += "<div id=\"webpage\">\n";
+  ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
+  ptr += "<p>Living Room: ";
+  ptr += tempSensor1;
+  ptr += "&deg;C</p>";
+  ptr += "<p>Bedroom: ";
+  ptr += tempSensor2;
+  ptr += "&deg;C</p>";
+  ptr += "<p>Kitchen: ";
+  ptr += tempSensor3;
+  ptr += "&deg;C</p>";
+  ptr += "</div>\n";
+  ptr += "</body>\n";
+  ptr += "</html>\n";
+  return ptr;
+}
+
+String SendHTMLxxx(void)
+{
+
+  String ptr = "<!DOCTYPE html> <html>\n";
+  ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  ptr += "<title>ESP32 Temperature Monitor</title>\n";
+  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
+  ptr += "body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;}\n";
+  ptr += "p {font-size: 24px;color: #444444;margin-bottom: 10px;}\n";
+  ptr += "</style>\n";
+  ptr += "</head>\n";
+  ptr += "<body>\n";
+  ptr += "<div id=\"webpage\">\n";
+  ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
+  ptr += "<p>Living Room: ";
+
+  ptr += "&deg;C</p>";
+  ptr += "<p>Bedroom: ";
+
+  ptr += "&deg;C</p>";
+  ptr += "<p>Kitchen: ";
+
+  ptr += "&deg;C</p>";
+  ptr += "</div>\n";
+  ptr += "</body>\n";
+  ptr += "</html>\n";
+  return ptr;
 }
