@@ -49,6 +49,9 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 
 #include <string>
 
+#include <iostream>
+#include <sstream>
+
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
 #define SERVICE_NAME "climate-http"
@@ -59,6 +62,13 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 // #define DHTPIN 23 // Digital pin connected to the DHT sensor
 // const int DHTPIN;
 // TODO: allow pin and sensor type to be configurable
+
+// Building for first use by multiple DS18B20 sensors
+struct TemperatureReading
+{
+  std::string location;
+  float temperature;
+};
 
 // Uncomment the type of sensor in use:
 // #define DHTTYPE    DHT11     // DHT 11
@@ -78,10 +88,11 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
 
-float tempSensor1, tempSensor2, tempSensor3;
+uint8_t tempSensor1, tempSensor2, tempSensor3;
 uint8_t sensor1[8] = {0x28, 0xa0, 0x7b, 0x49, 0xf6, 0xde, 0x3c, 0xe9};
 uint8_t sensor2[8] = {0x28, 0x08, 0xd3, 0x49, 0xf6, 0x3c, 0x3c, 0xfd};
 uint8_t sensor3[8] = {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38};
+#define MAX_READINGS 4
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -262,6 +273,32 @@ char *readAndGeneratePrometheusExport(const char *location)
   strncat(buffer, " ", 2);
   strncat(buffer, readDHTHumidity().c_str(), 6);
   strncat(buffer, "\n", 3);
+
+  return buffer;
+}
+
+char *buildPrometheusMultiTemptExport(TemperatureReading readings[MAX_READINGS])
+{
+  static char buffer[1024];
+  memset(buffer, 0, sizeof(buffer));
+
+  strncat(buffer, "# HELP environ_tempt Environment temperature (in C).\n", sizeof(buffer) - strlen(buffer) - 1);
+  strncat(buffer, "# TYPE environ_tempt gauge\n", sizeof(buffer) - strlen(buffer) - 1);
+
+  for (int i = 0; i < MAX_READINGS; i++)
+  {
+    if (readings[i].location.empty())
+      break;
+
+    strncat(buffer, "environ_tempt{location=\"", sizeof(buffer) - strlen(buffer) - 1);
+    strncat(buffer, readings[i].location.c_str(), sizeof(buffer) - strlen(buffer) - 1);
+    strncat(buffer, "\"} ", sizeof(buffer) - strlen(buffer) - 1);
+
+    char temperatureStr[8];
+    snprintf(temperatureStr, sizeof(temperatureStr), "%.2f", readings[i].temperature);
+    strncat(buffer, temperatureStr, sizeof(buffer) - strlen(buffer) - 1);
+    strncat(buffer, "\n", sizeof(buffer) - strlen(buffer) - 1);
+  }
 
   return buffer;
 }
@@ -514,7 +551,7 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", "preAlpha3"); });
+              { request->send(200, "text/html", "ds18b20-Alpha1"); });
 
     server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", pinDht); });
@@ -532,6 +569,19 @@ void setup()
                 tempSensor3 = sensors.getTempC(sensor3); // Gets the values of the temperature          
                 request->send(200, "text/html", SendHTML(tempSensor1, tempSensor2, tempSensor3)); });
     // request->send(200, "text/html", SendHTMLxxx()); });
+
+    server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
+              {           
+                sensors.requestTemperatures();
+
+                TemperatureReading readings[MAX_READINGS] = {
+                    {"RawWaterInput", sensors.getTempC(sensor1)},
+                    {"RawWaterExit", sensors.getTempC(sensor2)},
+                    {"EngineCoolantReturn", sensors.getTempC(sensor3)},
+                    {} // Ending marker
+                };
+
+                request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
     server.serveStatic("/", SPIFFS, "/");
 
@@ -710,6 +760,7 @@ String readDHTHumidity()
   }
 }
 
+// PoC method.
 String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
 {
   Serial.println(tempSensor1);
@@ -740,6 +791,7 @@ String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
   return ptr;
 }
 
+// probably working this one to convert to prometheus output
 String SendHTMLxxx(void)
 {
 
