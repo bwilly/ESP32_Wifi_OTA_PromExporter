@@ -353,7 +353,7 @@ bool initDNS()
 // Replaces placeholder with LED state value
 String processor(const String &var)
 {
-  if (var == "STATE")
+  if (var == "STATE") // this is from the example sample
   {
     if (digitalRead(ledPin))
     {
@@ -365,7 +365,33 @@ String processor(const String &var)
     }
     return ledState;
   }
-  return String();
+  else if (var == "SSID")
+  {
+    String SSID = readFile(SPIFFS, ssidPath);
+    return SSID;
+  }
+  else if (var == "PASS")
+  {
+    String PASS = readFile(SPIFFS, passPath);
+    return PASS;
+  }
+  else if (var == "LOCATION")
+  {
+    String LOCATION = readFile(SPIFFS, locationNamePath);
+    return LOCATION;
+  }
+  else if (var == "PIN")
+  {
+    String PIN = readFile(SPIFFS, pinDhtPath);
+    return PIN;
+  }
+  else
+    return String();
+
+  // ssid = readFile(SPIFFS, ssidPath);
+  // pass = readFile(SPIFFS, passPath);
+  // locationName = readFile(SPIFFS, locationNamePath);
+  // pinDht = readFile(SPIFFS, pinDhtPath);
 }
 
 // Replaces placeholder with DHT values
@@ -548,7 +574,7 @@ void setup()
     // copy/paste from setup section for AP -- changing URL path
     // todo: consolidate this copied code
     server.on("/manage", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
+              { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", "ds18b20-Alpha1"); });
@@ -561,6 +587,7 @@ void setup()
                 String result = printDS18b20();                     
                 request->send(200, "text/html", result); });
 
+    // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
     server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
               {           
                 sensors.requestTemperatures();
@@ -570,6 +597,7 @@ void setup()
                 request->send(200, "text/html", SendHTML(tempSensor1, tempSensor2, tempSensor3)); });
     // request->send(200, "text/html", SendHTMLxxx()); });
 
+    // todo: find out why some readings provide -127
     server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
               {           
                 sensors.requestTemperatures();
@@ -654,6 +682,7 @@ void setup()
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
+    // Load default example sample ESP toggle page (bwilly comment)
     server.serveStatic("/", SPIFFS, "/");
 
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
