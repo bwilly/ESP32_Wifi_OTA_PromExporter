@@ -51,6 +51,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 
 #include <iostream>
 #include <sstream>
+#include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
@@ -58,6 +60,13 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PROTOCOL "tcp"
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
+
+// MQTT Server details
+const char *mqtt_server = "pi4-2.local"; // todo: change to config param
+const int mqtt_port = 1883;              // todo: change to config param
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 // #define DHTPIN 23 // Digital pin connected to the DHT sensor
 // const int DHTPIN;
@@ -665,6 +674,9 @@ void setup()
     AsyncElegantOTA.begin(&server);
 
     server.begin();
+
+    // Set MQTT server
+    client.setServer(mqtt_server, mqtt_port);
   }
   else // SETUP
   {    // This path is meant to run only upon initial setup
@@ -750,6 +762,9 @@ void loop()
     ESP.restart();
     previous_time = current_time;
   }
+
+  publishTemperatureHumidity(readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
+  delay(5000); // Wait for 5 seconds before next loop
 }
 
 // DHT Temperature
@@ -848,4 +863,28 @@ String SendHTMLxxx(void)
   ptr += "</body>\n";
   ptr += "</html>\n";
   return ptr;
-}
+  void publishTemperatureHumidity(float temperature, float humidity)
+  {
+    const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
+    DynamicJsonDocument doc(capacity);
+
+    JsonObject obj1 = doc.createNestedObject();
+    obj1["bn"] = "sensor:12345";
+
+    JsonObject obj2 = doc.createNestedObject();
+    obj2["n"] = "temperature";
+    obj2["u"] = "C";
+    obj2["v"] = temperature;
+    obj2["ut"] = (int)time(nullptr);
+
+    JsonObject obj3 = doc.createNestedObject();
+    obj3["n"] = "humidity";
+    obj3["u"] = "%";
+    obj3["v"] = humidity;
+    obj3["ut"] = (int)time(nullptr);
+
+    char buffer[256];
+    serializeJson(doc, buffer);
+    client.publish("ship/temperature", buffer);
+    client.publish("ship/humidity", buffer);
+  }
