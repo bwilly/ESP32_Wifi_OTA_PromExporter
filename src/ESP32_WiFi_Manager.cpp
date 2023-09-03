@@ -151,6 +151,90 @@ const int ledPin = 2;
 
 String ledState;
 
+// DHT Temperature
+String readDHTTemperature()
+{
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  // Read temperature as Celsius (the default)
+  float t = dht->readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  // float t = dht.readTemperature(true);
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(t))
+  {
+    Serial.println("Failed to read from DHT sensor!");
+    return "--";
+  }
+  else
+  {
+    Serial.println(t);
+    return String(t);
+  }
+}
+
+String readDHTHumidity()
+{
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float h = dht->readHumidity();
+  if (isnan(h))
+  {
+    Serial.println("Failed to read from DHT sensor!");
+    return "--";
+  }
+  else
+  {
+    Serial.println(h);
+    return String(h);
+  }
+}
+
+// PoC method.
+String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
+{
+  Serial.println(tempSensor1);
+
+  String ptr = "<!DOCTYPE html> <html>\n";
+  ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
+  ptr += "<title>ESP32 Temperature Monitor</title>\n";
+  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
+  ptr += "body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;}\n";
+  ptr += "p {font-size: 24px;color: #444444;margin-bottom: 10px;}\n";
+  ptr += "</style>\n";
+  ptr += "</head>\n";
+  ptr += "<body>\n";
+  ptr += "<div id=\"webpage\">\n";
+  ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
+  ptr += "<p>Living Room: ";
+  ptr += tempSensor1;
+  ptr += "&deg;C</p>";
+  ptr += "<p>Bedroom: ";
+  ptr += tempSensor2;
+  ptr += "&deg;C</p>";
+  ptr += "<p>Kitchen: ";
+  ptr += tempSensor3;
+  ptr += "&deg;C</p>";
+  ptr += "</div>\n";
+  ptr += "</body>\n";
+  ptr += "</html>\n";
+  return ptr;
+}
+
+String printAddressAsString(DeviceAddress deviceAddress)
+{
+  String addressString = "";
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    addressString += "0x";
+    if (deviceAddress[i] < 0x10)
+      addressString += "0";
+    addressString += String(deviceAddress[i], HEX);
+    if (i < 7)
+      addressString += ", ";
+  }
+  addressString += "\n";
+  return addressString;
+}
+
 // Initialize SPIFFS
 void initSPIFFS()
 {
@@ -446,6 +530,20 @@ String printDS18b20(void)
   return output;
 }
 
+void printAddress(DeviceAddress deviceAddress)
+{
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    Serial.print("0x");
+    if (deviceAddress[i] < 0x10)
+      Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
+    if (i < 7)
+      Serial.print(", ");
+  }
+  Serial.println("");
+}
+
 void setupDS18b20(void)
 {
   // start serial port
@@ -477,36 +575,6 @@ void setupDS18b20(void)
   // Sensor 1 : 0x28, 0xA0, 0x7B, 0x49, 0xF6, 0xDE, 0x3C, 0xE9
   // Sensor 2 : 0x28, 0x08, 0xD3, 0x49, 0xF6, 0x3C, 0x3C, 0xFD
   // Sensor 3 : 0x28, 0xC5, 0xE1, 0x49, 0xF6, 0x50, 0x3C, 0x38
-}
-
-void printAddress(DeviceAddress deviceAddress)
-{
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    Serial.print("0x");
-    if (deviceAddress[i] < 0x10)
-      Serial.print("0");
-    Serial.print(deviceAddress[i], HEX);
-    if (i < 7)
-      Serial.print(", ");
-  }
-  Serial.println("");
-}
-
-String printAddressAsString(DeviceAddress deviceAddress)
-{
-  String addressString = "";
-  for (uint8_t i = 0; i < 8; i++)
-  {
-    addressString += "0x";
-    if (deviceAddress[i] < 0x10)
-      addressString += "0";
-    addressString += String(deviceAddress[i], HEX);
-    if (i < 7)
-      addressString += ", ";
-  }
-  addressString += "\n";
-  return addressString;
 }
 
 void setup()
@@ -745,96 +813,6 @@ void setup()
   }
 }
 
-void loop()
-{
-  // does this need to be here? I didn't use it, here, on the new master project. maybe it was only needed for the non-async web server? bwilly Feb26'23
-  // server.handleClient();
-
-  unsigned long current_time = millis(); // number of milliseconds since the upload
-
-  // checking for WIFI connection
-  if ((WiFi.status() != WL_CONNECTED) && (current_time - previous_time >= reconnect_delay))
-  {
-    Serial.print(millis());
-    Serial.println("Reconnecting to WIFI network by restarting to leverage best AP algorithm");
-    // WiFi.disconnect();
-    // WiFi.reconnect();
-    ESP.restart();
-    previous_time = current_time;
-  }
-
-  publishTemperatureHumidity(readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
-  delay(5000); // Wait for 5 seconds before next loop
-}
-
-// DHT Temperature
-String readDHTTemperature()
-{
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  // Read temperature as Celsius (the default)
-  float t = dht->readTemperature();
-  // Read temperature as Fahrenheit (isFahrenheit = true)
-  // float t = dht.readTemperature(true);
-  // Check if any reads failed and exit early (to try again).
-  if (isnan(t))
-  {
-    Serial.println("Failed to read from DHT sensor!");
-    return "--";
-  }
-  else
-  {
-    Serial.println(t);
-    return String(t);
-  }
-}
-
-String readDHTHumidity()
-{
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  float h = dht->readHumidity();
-  if (isnan(h))
-  {
-    Serial.println("Failed to read from DHT sensor!");
-    return "--";
-  }
-  else
-  {
-    Serial.println(h);
-    return String(h);
-  }
-}
-
-// PoC method.
-String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
-{
-  Serial.println(tempSensor1);
-
-  String ptr = "<!DOCTYPE html> <html>\n";
-  ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
-  ptr += "<title>ESP32 Temperature Monitor</title>\n";
-  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
-  ptr += "body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;}\n";
-  ptr += "p {font-size: 24px;color: #444444;margin-bottom: 10px;}\n";
-  ptr += "</style>\n";
-  ptr += "</head>\n";
-  ptr += "<body>\n";
-  ptr += "<div id=\"webpage\">\n";
-  ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
-  ptr += "<p>Living Room: ";
-  ptr += tempSensor1;
-  ptr += "&deg;C</p>";
-  ptr += "<p>Bedroom: ";
-  ptr += tempSensor2;
-  ptr += "&deg;C</p>";
-  ptr += "<p>Kitchen: ";
-  ptr += tempSensor3;
-  ptr += "&deg;C</p>";
-  ptr += "</div>\n";
-  ptr += "</body>\n";
-  ptr += "</html>\n";
-  return ptr;
-}
-
 // probably working this one to convert to prometheus output
 String SendHTMLxxx(void)
 {
@@ -863,28 +841,52 @@ String SendHTMLxxx(void)
   ptr += "</body>\n";
   ptr += "</html>\n";
   return ptr;
-  void publishTemperatureHumidity(float temperature, float humidity)
+}
+
+void publishTemperatureHumidity(float temperature, float humidity)
+{
+  const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
+  DynamicJsonDocument doc(capacity);
+
+  JsonObject obj1 = doc.createNestedObject();
+  obj1["bn"] = "sensor:12345";
+
+  JsonObject obj2 = doc.createNestedObject();
+  obj2["n"] = "temperature";
+  obj2["u"] = "C";
+  obj2["v"] = temperature;
+  obj2["ut"] = (int)time(nullptr);
+
+  JsonObject obj3 = doc.createNestedObject();
+  obj3["n"] = "humidity";
+  obj3["u"] = "%";
+  obj3["v"] = humidity;
+  obj3["ut"] = (int)time(nullptr);
+
+  char buffer[256];
+  serializeJson(doc, buffer);
+  client.publish("ship/temperature", buffer);
+  client.publish("ship/humidity", buffer);
+}
+
+void loop()
+{
+  // does this need to be here? I didn't use it, here, on the new master project. maybe it was only needed for the non-async web server? bwilly Feb26'23
+  // server.handleClient();
+
+  unsigned long current_time = millis(); // number of milliseconds since the upload
+
+  // checking for WIFI connection
+  if ((WiFi.status() != WL_CONNECTED) && (current_time - previous_time >= reconnect_delay))
   {
-    const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
-    DynamicJsonDocument doc(capacity);
-
-    JsonObject obj1 = doc.createNestedObject();
-    obj1["bn"] = "sensor:12345";
-
-    JsonObject obj2 = doc.createNestedObject();
-    obj2["n"] = "temperature";
-    obj2["u"] = "C";
-    obj2["v"] = temperature;
-    obj2["ut"] = (int)time(nullptr);
-
-    JsonObject obj3 = doc.createNestedObject();
-    obj3["n"] = "humidity";
-    obj3["u"] = "%";
-    obj3["v"] = humidity;
-    obj3["ut"] = (int)time(nullptr);
-
-    char buffer[256];
-    serializeJson(doc, buffer);
-    client.publish("ship/temperature", buffer);
-    client.publish("ship/humidity", buffer);
+    Serial.print(millis());
+    Serial.println("Reconnecting to WIFI network by restarting to leverage best AP algorithm");
+    // WiFi.disconnect();
+    // WiFi.reconnect();
+    ESP.restart();
+    previous_time = current_time;
   }
+
+  publishTemperatureHumidity(readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
+  delay(5000); // Wait for 5 seconds before next loop
+}
