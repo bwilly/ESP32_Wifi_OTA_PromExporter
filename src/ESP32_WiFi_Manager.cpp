@@ -41,7 +41,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include <WiFiMulti.h>
 #include "ESPmDNS.h"
 
-#include <DHT_U.h>
+// #include <DHT_U.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -54,12 +54,20 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
+#include "shared_vars.h"
+#include "ParamHandler.h"
+#include "SpiffsHandler.h"
+#include "DHT_SRL.h"
+#include "prometheus_srl.h"
+
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
 #define SERVICE_NAME "climate-http"
 #define SERVICE_PROTOCOL "tcp"
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
+
+#define version "mqttAndHeaderExtraction"
 
 // MQTT Server details
 const char *mqtt_server = "pi4-2.local"; // todo: change to config param
@@ -72,20 +80,13 @@ PubSubClient client(espClient);
 // const int DHTPIN;
 // TODO: allow pin and sensor type to be configurable
 
-// Building for first use by multiple DS18B20 sensors
-struct TemperatureReading
-{
-  std::string location;
-  float temperature;
-};
-
 // Uncomment the type of sensor in use:
 // #define DHTTYPE    DHT11     // DHT 11
-#define DHTTYPE DHT22 // DHT 22 (AM2302)
+// #define DHTTYPE DHT22 // DHT 22 (AM2302)
 // #define DHTTYPE    DHT21     // DHT 21 (AM2301)
 
 // DHT dht(DHTPIN, DHTTYPE);
-DHT *dht = nullptr; // global pointer declaration
+// DHT *dht = nullptr; // global pointer declaration
 
 // DS18b20
 // Data wire is plugged into port 15 on the ESP32
@@ -101,7 +102,7 @@ uint8_t tempSensor1, tempSensor2, tempSensor3;
 uint8_t sensor1[8] = {0x28, 0xa0, 0x7b, 0x49, 0xf6, 0xde, 0x3c, 0xe9};
 uint8_t sensor2[8] = {0x28, 0x08, 0xd3, 0x49, 0xf6, 0x3c, 0x3c, 0xfd};
 uint8_t sensor3[8] = {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38};
-#define MAX_READINGS 4
+// #define MAX_READINGS 4
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
@@ -111,16 +112,8 @@ const char *PARAM_INPUT_1 = "ssid";
 const char *PARAM_INPUT_2 = "pass";
 const char *PARAM_INPUT_3 = "location";
 const char *PARAM_INPUT_4 = "pinDht";
-// const char *PARAM_INPUT_3 = "ip";
-// const char *PARAM_INPUT_4 = "gateway";
-
-// Variables to save values from HTML form
-String ssid;
-String pass;
-String locationName; // used during regular operation, not only setup
-String pinDht;
-// String ip;
-// String gateway;
+// const char *PARAM_INPUT_5 = "mqtt-server";
+// const char *PARAM_INPUT_6 = "mqtt-port";
 
 // File paths to save input values permanently
 const char *ssidPath = "/ssid.txt";
@@ -150,43 +143,6 @@ const int ledPin = 2;
 // Stores LED state
 
 String ledState;
-
-// DHT Temperature
-String readDHTTemperature()
-{
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  // Read temperature as Celsius (the default)
-  float t = dht->readTemperature();
-  // Read temperature as Fahrenheit (isFahrenheit = true)
-  // float t = dht.readTemperature(true);
-  // Check if any reads failed and exit early (to try again).
-  if (isnan(t))
-  {
-    Serial.println("Failed to read from DHT sensor!");
-    return "--";
-  }
-  else
-  {
-    Serial.println(t);
-    return String(t);
-  }
-}
-
-String readDHTHumidity()
-{
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  float h = dht->readHumidity();
-  if (isnan(h))
-  {
-    Serial.println("Failed to read from DHT sensor!");
-    return "--";
-  }
-  else
-  {
-    Serial.println(h);
-    return String(h);
-  }
-}
 
 // PoC method.
 String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
@@ -245,48 +201,6 @@ void initSPIFFS()
   Serial.println("SPIFFS mounted successfully");
 }
 
-// Read File from SPIFFS
-String readFile(fs::FS &fs, const char *path)
-{
-  Serial.printf("Reading file: %s\r\n", path);
-
-  File file = fs.open(path);
-  if (!file || file.isDirectory())
-  {
-    Serial.println("- failed to open file for reading");
-    return String();
-  }
-
-  String fileContent;
-  while (file.available())
-  {
-    fileContent = file.readStringUntil('\n');
-    break;
-  }
-  return fileContent;
-}
-
-// Write file to SPIFFS
-void writeFile(fs::FS &fs, const char *path, const char *message)
-{
-  Serial.printf("Writing file: %s\r\n", path);
-
-  File file = fs.open(path, FILE_WRITE);
-  if (!file)
-  {
-    Serial.println("- failed to open file for writing");
-    return;
-  }
-  if (file.print(message))
-  {
-    Serial.println("- file written");
-  }
-  else
-  {
-    Serial.println("- frite failed");
-  }
-}
-
 // Initialize WiFi
 bool initWiFi()
 {
@@ -298,11 +212,13 @@ bool initWiFi()
     return false;
   }
 
+  Serial.println("Setting WiFi to WIFI_STA...");
   // Copied from Dec'22 working at saltmeadow to connect to strongest signal of mesh network
   WiFi.mode(WIFI_STA);
   // Add list of wifi networks
   WiFiMulti wifiMulti;
   wifiMulti.addAP(ssid.c_str(), pass.c_str());
+  Serial.println("WiFi scanNetworks...");
   WiFi.scanNetworks();
   // Connect to Wi-Fi using wifiMulti (connects to the SSID with strongest connection)
   Serial.println("Connecting Wifi; looking for strongest mesh node...");
@@ -331,71 +247,6 @@ bool initWiFi()
   return true;
 }
 
-// Prometheus Exporter
-
-char buffer[1024];
-
-// *****************
-//  Prometheus Exporter Format Dec9-2022
-// *****************
-// https://github.com/KireinaHoro/esp32-sensor-exporter/blob/master/src/main.cpp
-//
-// void send_metrics(WiFiClient &client) {
-char *readAndGeneratePrometheusExport(const char *location)
-{
-  memset(buffer, 0, 1);
-
-  strncat(buffer, "# HELP environ_tempt Environment temperature (in C).\n", 60);
-  strncat(buffer, "# TYPE environ_tempt gauge\n", 30);
-
-  strncat(buffer, "environ_tempt{location=\"", 50);
-  strncat(buffer, location, 20);
-  strncat(buffer, "\"}", 3);
-
-  strncat(buffer, " ", 2);
-  strncat(buffer, readDHTTemperature().c_str(), 6);
-  strncat(buffer, "\n", 2);
-
-  strncat(buffer, "# HELP environ_humidity Environment relative humidity (in percentage).\n", 99);
-  strncat(buffer, "# TYPE environ_humidity gauge\n", 32);
-
-  strncat(buffer, "environ_humidity{location=\"", 50);
-  strncat(buffer, location, 20);
-  strncat(buffer, "\"}", 3);
-
-  strncat(buffer, " ", 2);
-  strncat(buffer, readDHTHumidity().c_str(), 6);
-  strncat(buffer, "\n", 3);
-
-  return buffer;
-}
-
-char *buildPrometheusMultiTemptExport(TemperatureReading readings[MAX_READINGS])
-{
-  static char buffer[1024];
-  memset(buffer, 0, sizeof(buffer));
-
-  strncat(buffer, "# HELP environ_tempt Environment temperature (in C).\n", sizeof(buffer) - strlen(buffer) - 1);
-  strncat(buffer, "# TYPE environ_tempt gauge\n", sizeof(buffer) - strlen(buffer) - 1);
-
-  for (int i = 0; i < MAX_READINGS; i++)
-  {
-    if (readings[i].location.empty())
-      break;
-
-    strncat(buffer, "environ_tempt{location=\"", sizeof(buffer) - strlen(buffer) - 1);
-    strncat(buffer, readings[i].location.c_str(), sizeof(buffer) - strlen(buffer) - 1);
-    strncat(buffer, "\"} ", sizeof(buffer) - strlen(buffer) - 1);
-
-    char temperatureStr[8];
-    snprintf(temperatureStr, sizeof(temperatureStr), "%.2f", readings[i].temperature);
-    strncat(buffer, temperatureStr, sizeof(buffer) - strlen(buffer) - 1);
-    strncat(buffer, "\n", sizeof(buffer) - strlen(buffer) - 1);
-  }
-
-  return buffer;
-}
-
 /* Append a semi-unique id to the name template */
 char *MakeMine(const char *NameTemplate)
 {
@@ -411,7 +262,7 @@ char *MakeMine(const char *NameTemplate)
 
 void AdvertiseServices()
 {
-
+  Serial.println("AdvertiseServices on mDNS...");
   char *MyName = MakeMine(MDNS_DEVICE_NAME);
   if (MDNS.begin(MyName))
   {
@@ -446,6 +297,9 @@ bool initDNS()
 // Replaces placeholder with LED state value
 String processor(const String &var)
 {
+  Serial.println("process template token: ");
+  Serial.println(var);
+
   if (var == "STATE") // this is from the example sample
   {
     if (digitalRead(ledPin))
@@ -582,13 +436,17 @@ void setup()
   // Serial port for debugging purposes
   Serial.begin(115200);
 
+  Serial.println("initSpiffs...");
   initSPIFFS();
 
+  // i am commenting out below b/c i don't believe it has purpose (bwilly)
   // Set GPIO 2 as an OUTPUT
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
+  // Serial.println("ledPin mode and digitalWrite...");
+  // pinMode(ledPin, OUTPUT);
+  // digitalWrite(ledPin, LOW);
 
   // Load values saved in SPIFFS
+  Serial.println("loading SPIFFS values...");
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
   locationName = readFile(SPIFFS, locationNamePath);
@@ -602,22 +460,12 @@ void setup()
   // Serial.println(ip);
   // Serial.println(gateway);
 
-  if (pinDht != nullptr)
-  {
-    Serial.println("About to convert pin to int.");
-    int _pinDht = std::stoi(pinDht.c_str());
-    dht = new DHT(_pinDht, DHTTYPE);
-  }
-  else
-  {
-    Serial.println("Cannot configure DHT because pin not defined.");
-  }
-
   if (initWiFi())
   { // Station Mode
-
+    Serial.println("initDNS...");
     initDNS();
 
+    Serial.println("set web root /index.html...");
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
@@ -654,7 +502,7 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", "ds18b20-Alpha1"); });
+              { request->send(200, "text/html", version); });
 
     server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", pinDht); });
@@ -690,61 +538,25 @@ void setup()
 
     server.serveStatic("/", SPIFFS, "/");
 
-    // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root /
+    // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
               {
-      int params = request->params();
-      for(int i=0;i<params;i++){
-        AsyncWebParameter* p = request->getParam(i);
-        if(p->isPost()){
-          // HTTP POST ssid value
-          if (p->name() == PARAM_INPUT_1) {
-            ssid = p->value().c_str();
-            Serial.print("SSID set to: ");
-            Serial.println(ssid);
-            // Write file to save value
-            writeFile(SPIFFS, ssidPath, ssid.c_str());
-          }
-          // HTTP POST pass value
-          if (p->name() == PARAM_INPUT_2) {
-            pass = p->value().c_str();
-            Serial.print("Password set to: ");
-            Serial.println(pass);
-            // Write file to save value
-            writeFile(SPIFFS, passPath, pass.c_str());
-          }
-          // HTTP POST location value
-          if (p->name() == PARAM_INPUT_3) {
-            locationName = p->value().c_str();
-            Serial.print("Location (for mDNS Hostname and Prometheus): ");
-            Serial.println(locationName);
-            // Write file to save value
-            writeFile(SPIFFS, locationNamePath, locationName.c_str());
-          }
-          // HTTP POST location value
-          if (p->name() == PARAM_INPUT_4) {
-            pinDht = p->value().c_str();
-            Serial.print("Pin (for DHT-22): ");
-            Serial.println(pinDht);
-            // Write file to save value
-            writeFile(SPIFFS, pinDhtPath, pinDht.c_str());
-          }
-        }
-      }
-      // request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
+      handlePostParameters(request); 
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(3000);
       ESP.restart(); });
-
-    // END copy/paste
 
     // uses path like server.on("/update")
     AsyncElegantOTA.begin(&server);
 
     server.begin();
 
+    // todo: removeMe: reinstate
     // Set MQTT server
-    client.setServer(mqtt_server, mqtt_port);
+    // Serial.println("Setting MQTT server...");
+    // client.setServer(mqtt_server, mqtt_port);
+
+    Serial.println("Entry setup loop complete.");
   }
   else // SETUP
   {    // This path is meant to run only upon initial setup
@@ -752,63 +564,35 @@ void setup()
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
-    WiFi.softAP("ESP-WIFI-MANAGER", "saltmeadow");
+    WiFi.softAP("ESP-WIFI-MANAGER", "saltmeadow"); // name and password
 
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
     Serial.println(IP);
 
+    if (!SPIFFS.begin(true))
+    {
+      Serial.println("SPIFFS is out of scope per bwilly!");
+    }
     // Web Server Root URL
+    Serial.print("Setting web root path to /wifimanager.html... ");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
+    // todo: removeMe reinstate comments
     // Load default example sample ESP toggle page (bwilly comment)
-    server.serveStatic("/", SPIFFS, "/");
+    // Serial.print("Setting serveStatic for web root...");
+    // server.serveStatic("/", SPIFFS, "/");
 
+    Serial.print("Setting root POST and delegating to handlePostParameters...");
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
               {
-      int params = request->params();
-      for(int i=0;i<params;i++){
-        AsyncWebParameter* p = request->getParam(i);
-        if(p->isPost()){
-          // HTTP POST ssid value
-          if (p->name() == PARAM_INPUT_1) {
-            ssid = p->value().c_str();
-            Serial.print("SSID set to: ");
-            Serial.println(ssid);
-            // Write file to save value
-            writeFile(SPIFFS, ssidPath, ssid.c_str());
-          }
-          // HTTP POST pass value
-          if (p->name() == PARAM_INPUT_2) {
-            pass = p->value().c_str();
-            Serial.print("Password set to: ");
-            Serial.println(pass);
-            // Write file to save value
-            writeFile(SPIFFS, passPath, pass.c_str());
-          }
-          // HTTP POST location value
-          if (p->name() == PARAM_INPUT_3) {
-            locationName = p->value().c_str();
-            Serial.print("Location (for mDNS Hostname and Prometheus): ");
-            Serial.println(locationName);
-            // Write file to save value
-            writeFile(SPIFFS, locationNamePath, locationName.c_str());
-          }
-          // HTTP POST location value
-          if (p->name() == PARAM_INPUT_4) {
-            pinDht = p->value().c_str();
-            Serial.print("Pin (for DHT-22): ");
-            Serial.println(pinDht);
-            // Write file to save value
-            writeFile(SPIFFS, pinDhtPath, pinDht.c_str());
-          }
-        }
-      }
-      // request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
+      handlePostParameters(request);
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(3000);
       ESP.restart(); });
+
+    Serial.print("Starting web server...");
     server.begin();
   }
 }
@@ -843,7 +627,7 @@ String SendHTMLxxx(void)
   return ptr;
 }
 
-void publishTemperatureHumidity(float temperature, float humidity)
+void publishTemperatureHumidity(PubSubClient _client, float _temperature, float _humidity)
 {
   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
   DynamicJsonDocument doc(capacity);
@@ -854,19 +638,19 @@ void publishTemperatureHumidity(float temperature, float humidity)
   JsonObject obj2 = doc.createNestedObject();
   obj2["n"] = "temperature";
   obj2["u"] = "C";
-  obj2["v"] = temperature;
+  obj2["v"] = _temperature;
   obj2["ut"] = (int)time(nullptr);
 
   JsonObject obj3 = doc.createNestedObject();
   obj3["n"] = "humidity";
   obj3["u"] = "%";
-  obj3["v"] = humidity;
+  obj3["v"] = _humidity;
   obj3["ut"] = (int)time(nullptr);
 
   char buffer[256];
   serializeJson(doc, buffer);
-  client.publish("ship/temperature", buffer);
-  client.publish("ship/humidity", buffer);
+  _client.publish("ship/temperature", buffer);
+  _client.publish("ship/humidity", buffer);
 }
 
 void loop()
@@ -887,6 +671,8 @@ void loop()
     previous_time = current_time;
   }
 
-  publishTemperatureHumidity(readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
+  // todo: removeMe reinstate
+  // Serial.println("publishTemperatureHumidity then sleep...");
+  // publishTemperatureHumidity(client, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
   delay(5000); // Wait for 5 seconds before next loop
 }
