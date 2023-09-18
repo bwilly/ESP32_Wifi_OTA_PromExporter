@@ -1,17 +1,16 @@
 #pragma once
 #include <Arduino.h>
 
-// File paths to save input values permanently
-extern const char *ssidPath;
-extern const char *passPath;
-extern const char *locationNamePath;
-extern const char *pinDhtPath;
-
 // Search for parameter in HTTP POST request
-extern const char *PARAM_INPUT_1; // = "ssid";
-extern const char *PARAM_INPUT_2; // = "pass";
-extern const char *PARAM_INPUT_3; // = "location";
-extern const char *PARAM_INPUT_4; // = "pinDht";
+extern const char *PARAM_WIFI_SSID; // = "ssid";
+extern const char *PARAM_WIFI_PASS; // = "pass";
+extern const char *PARAM_LOCATION;  // = "location";
+extern const char *PARAM_PIN_DHT;   // = "pinDht";
+
+extern String ssidPath;
+extern String passPath;
+extern String locationNamePath;
+extern String pinDhtPath;
 
 // Variables to save values from HTML form
 extern String ssid;

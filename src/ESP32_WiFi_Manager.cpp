@@ -108,20 +108,23 @@ uint8_t sensor3[8] = {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38};
 AsyncWebServer server(80);
 
 // Search for parameter in HTTP POST request
-const char *PARAM_INPUT_1 = "ssid";
-const char *PARAM_INPUT_2 = "pass";
-const char *PARAM_INPUT_3 = "location";
-const char *PARAM_INPUT_4 = "pinDht";
+const char *PARAM_WIFI_SSID = "ssid";
+const char *PARAM_WIFI_PASS = "pass";
+const char *PARAM_LOCATION = "location";
+const char *PARAM_PIN_DHT = "pindht";
 // const char *PARAM_INPUT_5 = "mqtt-server";
 // const char *PARAM_INPUT_6 = "mqtt-port";
 
-// File paths to save input values permanently
-const char *ssidPath = "/ssid.txt";
-const char *passPath = "/pass.txt";
-const char *locationNamePath = "/location.txt";
-const char *pinDhtPath = "/pindht.txt";
-// const char *ipPath = "/ip.txt";
-// const char *gatewayPath = "/gateway.txt";
+String makePath(const char *param)
+{
+  return String("/") + param + ".txt";
+}
+
+// For SPIFFS
+String ssidPath = makePath(PARAM_WIFI_SSID);
+String passPath = makePath(PARAM_WIFI_PASS);
+String locationNamePath = makePath(PARAM_LOCATION);
+String pinDhtPath = makePath(PARAM_PIN_DHT);
 
 // IPAddress localIP;
 // IPAddress localIP(192, 168, 1, 200); // hardcoded
@@ -314,22 +317,22 @@ String processor(const String &var)
   }
   else if (var == "SSID")
   {
-    String SSID = readFile(SPIFFS, ssidPath);
+    String SSID = readFile(SPIFFS, ssidPath.c_str());
     return SSID;
   }
   else if (var == "PASS")
   {
-    String PASS = readFile(SPIFFS, passPath);
+    String PASS = readFile(SPIFFS, passPath.c_str());
     return PASS;
   }
   else if (var == "LOCATION")
   {
-    String LOCATION = readFile(SPIFFS, locationNamePath);
+    String LOCATION = readFile(SPIFFS, locationNamePath.c_str());
     return LOCATION;
   }
   else if (var == "PIN")
   {
-    String PIN = readFile(SPIFFS, pinDhtPath);
+    String PIN = readFile(SPIFFS, pinDhtPath.c_str());
     return PIN;
   }
   else
@@ -447,10 +450,10 @@ void setup()
 
   // Load values saved in SPIFFS
   Serial.println("loading SPIFFS values...");
-  ssid = readFile(SPIFFS, ssidPath);
-  pass = readFile(SPIFFS, passPath);
-  locationName = readFile(SPIFFS, locationNamePath);
-  pinDht = readFile(SPIFFS, pinDhtPath);
+  ssid = readFile(SPIFFS, ssidPath.c_str());
+  pass = readFile(SPIFFS, passPath.c_str());
+  locationName = readFile(SPIFFS, locationNamePath.c_str());
+  pinDht = readFile(SPIFFS, pinDhtPath.c_str());
   // ip = readFile(SPIFFS, ipPath);
   // gateway = readFile(SPIFFS, gatewayPath);
   Serial.println(ssid);

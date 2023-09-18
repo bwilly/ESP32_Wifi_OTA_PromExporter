@@ -11,40 +11,40 @@ void handlePostParameters(AsyncWebServerRequest *request)
         AsyncWebParameter *p = request->getParam(i);
         if (p->isPost())
         {
-            if (p->name() == PARAM_INPUT_1)
+            if (p->name() == PARAM_WIFI_SSID)
             {
                 ssid = p->value().c_str();
                 Serial.print("SSID set to: ");
                 Serial.println(ssid);
                 // Write file to save value
-                writeFile(SPIFFS, ssidPath, ssid.c_str());
+                writeFile(SPIFFS, ssidPath.c_str(), ssid.c_str());
             }
             // HTTP POST pass value
-            if (p->name() == PARAM_INPUT_2)
+            if (p->name() == PARAM_WIFI_PASS)
             {
                 pass = p->value().c_str();
                 Serial.print("Password set to: ");
                 Serial.println(pass);
                 // Write file to save value
-                writeFile(SPIFFS, passPath, pass.c_str());
+                writeFile(SPIFFS, passPath.c_str(), pass.c_str());
             }
             // HTTP POST location value
-            if (p->name() == PARAM_INPUT_3)
+            if (p->name() == PARAM_LOCATION)
             {
                 locationName = p->value().c_str();
                 Serial.print("Location (for mDNS Hostname and Prometheus): ");
                 Serial.println(locationName);
                 // Write file to save value
-                writeFile(SPIFFS, locationNamePath, locationName.c_str());
+                writeFile(SPIFFS, locationNamePath.c_str(), locationName.c_str());
             }
             // HTTP POST location value
-            if (p->name() == PARAM_INPUT_4)
+            if (p->name() == PARAM_PIN_DHT)
             {
                 pinDht = p->value().c_str();
                 Serial.print("Pin (for DHT-22): ");
                 Serial.println(pinDht);
                 // Write file to save value
-                writeFile(SPIFFS, pinDhtPath, pinDht.c_str());
+                writeFile(SPIFFS, pinDhtPath.c_str(), pinDht.c_str());
             }
         }
     }
