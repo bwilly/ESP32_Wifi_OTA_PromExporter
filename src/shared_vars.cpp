@@ -6,3 +6,5 @@ String ssid;
 String pass;
 String locationName; // used during regular operation, not only setup
 String pinDht;
+String mqttServer;
+String mqttPort;

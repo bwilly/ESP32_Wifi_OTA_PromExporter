@@ -108,12 +108,13 @@ uint8_t sensor3[8] = {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38};
 AsyncWebServer server(80);
 
 // Search for parameter in HTTP POST request
+// This value must match the name or ID of the HTML input control and the process() value for displaying the value in the manage page
 const char *PARAM_WIFI_SSID = "ssid";
 const char *PARAM_WIFI_PASS = "pass";
 const char *PARAM_LOCATION = "location";
-const char *PARAM_PIN_DHT = "pindht";
-// const char *PARAM_INPUT_5 = "mqtt-server";
-// const char *PARAM_INPUT_6 = "mqtt-port";
+const char *PARAM_PIN_DHT = "pinDht";
+const char *PARAM_MQTT_SERVER = "mqtt-server";
+const char *PARAM_MQTT_PORT = "mqtt-port";
 
 String makePath(const char *param)
 {
@@ -125,6 +126,8 @@ String ssidPath = makePath(PARAM_WIFI_SSID);
 String passPath = makePath(PARAM_WIFI_PASS);
 String locationNamePath = makePath(PARAM_LOCATION);
 String pinDhtPath = makePath(PARAM_PIN_DHT);
+String mqttServerPath = makePath(PARAM_MQTT_SERVER);
+String mqttPortPath = makePath(PARAM_MQTT_PORT);
 
 // IPAddress localIP;
 // IPAddress localIP(192, 168, 1, 200); // hardcoded
@@ -315,25 +318,29 @@ String processor(const String &var)
     }
     return ledState;
   }
-  else if (var == "SSID")
+  else if (var == "ssid")
   {
-    String SSID = readFile(SPIFFS, ssidPath.c_str());
-    return SSID;
+    return readFile(SPIFFS, ssidPath.c_str());
   }
-  else if (var == "PASS")
+  else if (var == "pass")
   {
-    String PASS = readFile(SPIFFS, passPath.c_str());
-    return PASS;
+    return readFile(SPIFFS, passPath.c_str());
   }
-  else if (var == "LOCATION")
+  else if (var == "location")
   {
-    String LOCATION = readFile(SPIFFS, locationNamePath.c_str());
-    return LOCATION;
+    return readFile(SPIFFS, locationNamePath.c_str());
   }
-  else if (var == "PIN")
+  else if (var == "pinDht")
   {
-    String PIN = readFile(SPIFFS, pinDhtPath.c_str());
-    return PIN;
+    return readFile(SPIFFS, pinDhtPath.c_str());
+  }
+  else if (var == "mqtt-server")
+  {
+    return readFile(SPIFFS, mqttServerPath.c_str());
+  }
+  else if (var == "mqtt-port")
+  {
+    return readFile(SPIFFS, mqttPortPath.c_str());
   }
   else
     return String();

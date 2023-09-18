@@ -46,6 +46,24 @@ void handlePostParameters(AsyncWebServerRequest *request)
                 // Write file to save value
                 writeFile(SPIFFS, pinDhtPath.c_str(), pinDht.c_str());
             }
+            // HTTP POST location value
+            if (p->name() == PARAM_MQTT_SERVER)
+            {
+                mqttServer = p->value().c_str();
+                Serial.print("PARAM_MQTT_SERVER: ");
+                Serial.println(mqttServer);
+                // Write file to save value
+                writeFile(SPIFFS, mqttServerPath.c_str(), mqttServer.c_str());
+            }
+            // HTTP POST location value
+            if (p->name() == PARAM_MQTT_PORT)
+            {
+                mqttPort = p->value().c_str();
+                Serial.print("PARAM_MQTT_PORT: ");
+                Serial.println(mqttPort);
+                // Write file to save value
+                writeFile(SPIFFS, mqttPortPath.c_str(), mqttPort.c_str());
+            }
         }
     }
 }
