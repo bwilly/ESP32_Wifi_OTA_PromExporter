@@ -67,7 +67,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
 
-#define version "mqttAndHeaderExtraction"
+#define version "multiSensorSelection"
 
 // MQTT Server details
 const char *mqtt_server = "pi4-2.local"; // todo: change to config param
@@ -98,10 +98,11 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
 
-uint8_t tempSensor1, tempSensor2, tempSensor3;
-uint8_t sensor1[8] = {0x28, 0xa0, 0x7b, 0x49, 0xf6, 0xde, 0x3c, 0xe9};
-uint8_t sensor2[8] = {0x28, 0x08, 0xd3, 0x49, 0xf6, 0x3c, 0x3c, 0xfd};
-uint8_t sensor3[8] = {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38};
+// uint8_t w1[3][8] = {
+//     {0x28, 0xa0, 0x7b, 0x49, 0xf6, 0xde, 0x3c, 0xe9},
+//     {0x28, 0x08, 0xd3, 0x49, 0xf6, 0x3c, 0x3c, 0xfd},
+//     {0x28, 0xc5, 0xe1, 0x49, 0xf6, 0x50, 0x3c, 0x38}};
+
 // #define MAX_READINGS 4
 
 // Create AsyncWebServer object on port 80
@@ -112,9 +113,16 @@ AsyncWebServer server(80);
 const char *PARAM_WIFI_SSID = "ssid";
 const char *PARAM_WIFI_PASS = "pass";
 const char *PARAM_LOCATION = "location";
-const char *PARAM_PIN_DHT = "pinDht";
+const char *PARAM_PIN_DHT = "pinDht"; // wish i could change name convention. see above comment
 const char *PARAM_MQTT_SERVER = "mqtt-server";
 const char *PARAM_MQTT_PORT = "mqtt-port";
+const char *PARAM_MAIN_DELAY = "main-delay";
+const char *PARAM_W1_1 = "w1-1";
+const char *PARAM_W1_2 = "w1-2";
+const char *PARAM_W1_3 = "w1-3";
+const char *PARAM_ENABLE_W1 = "enableW1";
+const char *PARAM_ENABLE_DHT = "enableDHT";
+const char *PARAM_ENABLE_MQTT = "enableMQTT";
 
 String makePath(const char *param)
 {
@@ -128,6 +136,13 @@ String locationNamePath = makePath(PARAM_LOCATION);
 String pinDhtPath = makePath(PARAM_PIN_DHT);
 String mqttServerPath = makePath(PARAM_MQTT_SERVER);
 String mqttPortPath = makePath(PARAM_MQTT_PORT);
+String mainDelayPath = makePath(PARAM_MAIN_DELAY);
+String w1_1Path = makePath(PARAM_W1_1);
+String w1_2Path = makePath(PARAM_W1_2);
+String w1_3Path = makePath(PARAM_W1_3);
+String enableW1Path = makePath(PARAM_ENABLE_W1);
+String enableDHTPath = makePath(PARAM_ENABLE_DHT);
+String enableMQTTPath = makePath(PARAM_ENABLE_MQTT);
 
 // IPAddress localIP;
 // IPAddress localIP(192, 168, 1, 200); // hardcoded
@@ -301,6 +316,7 @@ bool initDNS()
   return true;
 }
 // Replaces placeholder with LED state value
+// Only used for printing info
 String processor(const String &var)
 {
   Serial.println("process template token: ");
@@ -341,6 +357,22 @@ String processor(const String &var)
   else if (var == "mqtt-port")
   {
     return readFile(SPIFFS, mqttPortPath.c_str());
+  }
+  else if (var == "main-delay")
+  {
+    return readFile(SPIFFS, mainDelayPath.c_str());
+  }
+  else if (var == "w1-1")
+  {
+    return readFile(SPIFFS, w1_1Path.c_str());
+  }
+  else if (var == "w1-2")
+  {
+    return readFile(SPIFFS, w1_2Path.c_str());
+  }
+  else if (var == "w1-3")
+  {
+    return readFile(SPIFFS, w1_3Path.c_str());
   }
   else
     return String();
@@ -461,6 +493,19 @@ void setup()
   pass = readFile(SPIFFS, passPath.c_str());
   locationName = readFile(SPIFFS, locationNamePath.c_str());
   pinDht = readFile(SPIFFS, pinDhtPath.c_str());
+  mqttServer = readFile(SPIFFS, mqttServerPath.c_str());
+  mqttPort = readFile(SPIFFS, mqttPortPath.c_str());
+  mainDelay = readFile(SPIFFS, mainDelayPath.c_str()).toInt();
+  bool w1Enabled = (readFile(SPIFFS, enableW1Path.c_str()) == "true");
+  bool dhtEnabled = (readFile(SPIFFS, enableDHTPath.c_str()) == "true");
+  bool mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
+
+  const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
+  for (int i = 0; i < 3; i++)
+  {
+    loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
+  }
+
   // ip = readFile(SPIFFS, ipPath);
   // gateway = readFile(SPIFFS, gatewayPath);
   Serial.println(ssid);
@@ -525,11 +570,8 @@ void setup()
     // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
     server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
               {           
-                sensors.requestTemperatures();
-                tempSensor1 = sensors.getTempC(sensor1); // Gets the values of the temperature
-                tempSensor2 = sensors.getTempC(sensor2); // Gets the values of the temperature
-                tempSensor3 = sensors.getTempC(sensor3); // Gets the values of the temperature          
-                request->send(200, "text/html", SendHTML(tempSensor1, tempSensor2, tempSensor3)); });
+                sensors.requestTemperatures();                
+                request->send(200, "text/html", SendHTML(sensors.getTempC(w1Address[0]), sensors.getTempC(w1Address[1]), sensors.getTempC(w1Address[2]))); });
     // request->send(200, "text/html", SendHTMLxxx()); });
 
     // todo: find out why some readings provide -127
@@ -538,22 +580,22 @@ void setup()
                 sensors.requestTemperatures();
 
                 TemperatureReading readings[MAX_READINGS] = {
-                    {"RawWaterInput", sensors.getTempC(sensor1)},
-                    {"RawWaterExit", sensors.getTempC(sensor2)},
-                    {"EngineCoolantReturn", sensors.getTempC(sensor3)},
+                    {"RawWaterInput", sensors.getTempC(w1Address[0])},
+                    {"RawWaterExit", sensors.getTempC(w1Address[1])},
+                    {"EngineCoolantReturn", sensors.getTempC(w1Address[2])},
                     {} // Ending marker
                 };
 
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
-    server.serveStatic("/", SPIFFS, "/");
+    // server.serveStatic("/", SPIFFS, "/");
 
     // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
               {
       handlePostParameters(request); 
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
-      delay(3000);
+      delay(mainDelay.toInt()); // delay(3000);
       ESP.restart(); });
 
     // uses path like server.on("/update")
@@ -586,9 +628,11 @@ void setup()
     }
     // Web Server Root URL
     Serial.print("Setting web root path to /wifimanager.html... ");
+
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
+    server.serveStatic("/", SPIFFS, "/");
     // todo: removeMe reinstate comments
     // Load default example sample ESP toggle page (bwilly comment)
     // Serial.print("Setting serveStatic for web root...");

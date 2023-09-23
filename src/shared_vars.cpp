@@ -8,3 +8,6 @@ String locationName; // used during regular operation, not only setup
 String pinDht;
 String mqttServer;
 String mqttPort;
+String mainDelay;
+uint8_t w1Address[3][8];
+// uint8_t w1Sensors[];

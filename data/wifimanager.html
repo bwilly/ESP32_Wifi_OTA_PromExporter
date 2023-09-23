@@ -29,6 +29,15 @@
               <input type="text" id="pinDht" name="pinDht" /><span
                 >%pinDht%</span
               ><br />
+              <label for="w1-1">OneWire ID 1(HEX)</label>
+              <input type="text" id="w1-1" name="w1-1" /><span>%w1-1%</span
+              ><br />
+              <label for="w1-2">OneWire ID 2(HEX)</label>
+              <input type="text" id="w1-2" name="w1-2" /><span>%w1-2%</span
+              ><br />
+              <label for="w1-3">OneWire ID 3(HEX)</label>
+              <input type="text" id="w1-3" name="w1-3" /><span>%w1-3%</span
+              ><br />
               <label for="mqtt-server">mqtt-server</label>
               <input type="text" id="mqtt-server" name="mqtt-server" /><span
                 >%mqtt-server%</span
@@ -37,6 +46,24 @@
               <input type="text" id="mqtt-port" name="mqtt-port" /><span
                 >%mqtt-port%</span
               ><br />
+              <label for="main-delay">Main Loop Delay (ms)</label>
+              <input type="text" id="main-delay" name="main-delay" /><span
+                >%main-delay%</span
+              ><br />
+              <input type="checkbox" id="enableW1" name="enableW1" /><span
+                >%enableW1%</span
+              ><br />
+
+              <label for="enableDHT">Enable DHT</label>
+              <input type="checkbox" id="enableDHT" name="enableDHT" /><span
+                >%enableDHT%</span
+              ><br />
+
+              <label for="enableMQTT">Enable MQTT</label>
+              <input type="checkbox" id="enableMQTT" name="enableMQTT" /><span
+                >%enableMQTT%</span
+              ><br />
+
               <!-- <label for="ip">IP Address</label>
             <input type="text" id ="ip" name="ip" value="192.168.1.200"><br>
             <label for="gateway">Gateway Address</label>
