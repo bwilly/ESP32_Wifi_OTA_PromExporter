@@ -50,18 +50,20 @@
               <input type="text" id="main-delay" name="main-delay" /><span
                 >%main-delay%</span
               ><br />
+
+              <label for="enableW1">Enable OneWire</label>
               <input type="checkbox" id="enableW1" name="enableW1" /><span
-                >%enableW1%</span
+                >%w1Enabled%</span
               ><br />
 
               <label for="enableDHT">Enable DHT</label>
               <input type="checkbox" id="enableDHT" name="enableDHT" /><span
-                >%enableDHT%</span
-              ><br />
+                >%dhtEnabled%</span
+              ><br /><!-- todo: populate the checkboxes with current-state if it exists Sep22 2023-->
 
               <label for="enableMQTT">Enable MQTT</label>
               <input type="checkbox" id="enableMQTT" name="enableMQTT" /><span
-                >%enableMQTT%</span
+                >%mqttEnabled%</span
               ><br />
 
               <!-- <label for="ip">IP Address</label>

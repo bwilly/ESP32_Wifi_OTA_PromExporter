@@ -632,11 +632,8 @@ void setup()
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
-    server.serveStatic("/", SPIFFS, "/");
-    // todo: removeMe reinstate comments
-    // Load default example sample ESP toggle page (bwilly comment)
-    // Serial.print("Setting serveStatic for web root...");
-    // server.serveStatic("/", SPIFFS, "/");
+    server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
+  
 
     Serial.print("Setting root POST and delegating to handlePostParameters...");
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
@@ -725,8 +722,10 @@ void loop()
     previous_time = current_time;
   }
 
-  // todo: removeMe reinstate
-  // Serial.println("publishTemperatureHumidity then sleep...");
-  // publishTemperatureHumidity(client, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
-  delay(5000); // Wait for 5 seconds before next loop
+  if (mqttEnabled)
+  {
+    Serial.println("publishTemperatureHumidity then sleep...");
+    publishTemperatureHumidity(client, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
+  }
+  delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }

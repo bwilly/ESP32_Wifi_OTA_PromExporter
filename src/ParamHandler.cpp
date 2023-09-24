@@ -89,8 +89,11 @@ void handlePostParameters(AsyncWebServerRequest *request)
             }
             else if (p->name() == PARAM_ENABLE_W1)
             {
+                Serial.print("PARAM_ENABLE_W1: ");
+                Serial.println(p->value());
+
                 String val = (p->value() == "on") ? "true" : "false";
-                writeFile(SPIFFS, enableW1Path.c_str(), p->value().c_str());
+                writeFile(SPIFFS, enableW1Path.c_str(), val.c_str());
             }
             else if (p->name() == PARAM_ENABLE_DHT)
             {

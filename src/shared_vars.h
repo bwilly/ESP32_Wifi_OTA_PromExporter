@@ -37,6 +37,10 @@ extern String locationName; // used during regular operation, not only setup
 extern String pinDht;
 extern String mqttServer;
 extern String mqttPort;
+extern bool w1Enabled;
+extern bool dhtEnabled;
+extern bool mqttEnabled;
+
 extern String mainDelay;
 extern uint8_t w1Address[3][8];
 // extern uint8_t w1Sensor[3][8];
