@@ -5,11 +5,21 @@
 
 void handlePostParameters(AsyncWebServerRequest *request)
 {
+    // Default values
+    bool enableW1 = false;
+    bool enableDHT = false;
+    bool enableMQTT = false;
+
+    bool enableW1_checked = false;
+    bool enableDHT_checked = false;
+    bool enableMQTT_checked = false;
+
     int params = request->params();
     for (int i = 0; i < params; i++)
     {
         AsyncWebParameter *p = request->getParam(i);
-        if (p->isPost())
+        // if (p->isPost())
+        if (p->isPost() && p->value().length() > 0) // This checks if the value is not empty
         {
             if (p->name() == PARAM_WIFI_SSID)
             {
@@ -87,24 +97,23 @@ void handlePostParameters(AsyncWebServerRequest *request)
                 parseAndStoreHex(p->value(), 2);
                 writeFile(SPIFFS, w1_3Path.c_str(), p->value().c_str());
             }
-            else if (p->name() == PARAM_ENABLE_W1)
-            {
-                Serial.print("PARAM_ENABLE_W1: ");
-                Serial.println(p->value());
 
-                String val = (p->value() == "on") ? "true" : "false";
-                writeFile(SPIFFS, enableW1Path.c_str(), val.c_str());
-            }
-            else if (p->name() == PARAM_ENABLE_DHT)
+            else if (p->name() == PARAM_ENABLE_W1 && p->value() == "on")
             {
-                String val = (p->value() == "on") ? "true" : "false";
-                writeFile(SPIFFS, enableDHTPath.c_str(), p->value().c_str());
+                enableW1 = true;
             }
-            else if (p->name() == PARAM_ENABLE_MQTT)
+            else if (p->name() == PARAM_ENABLE_DHT && p->value() == "on")
             {
-                String val = (p->value() == "on") ? "true" : "false";
-                writeFile(SPIFFS, enableMQTTPath.c_str(), p->value().c_str());
+                enableDHT = true;
+            }
+            else if (p->name() == PARAM_ENABLE_MQTT && p->value() == "on")
+            {
+                enableMQTT = true;
             }
         }
     }
+    // Now, save these to SPIFFS regardless of whether they were received in the POST or not.
+    writeFile(SPIFFS, enableW1Path.c_str(), enableW1 ? "true" : "false");
+    writeFile(SPIFFS, enableDHTPath.c_str(), enableDHT ? "true" : "false");
+    writeFile(SPIFFS, enableMQTTPath.c_str(), enableMQTT ? "true" : "false");
 }

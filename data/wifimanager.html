@@ -52,19 +52,29 @@
               ><br />
 
               <label for="enableW1">Enable OneWire</label>
-              <input type="checkbox" id="enableW1" name="enableW1" /><span
-                >%w1Enabled%</span
-              ><br />
+              <input
+                type="checkbox"
+                id="enableW1"
+                name="enableW1"
+                %enableW1_checked%
+              /><span>%enableW1_checked%</span><br />
 
               <label for="enableDHT">Enable DHT</label>
-              <input type="checkbox" id="enableDHT" name="enableDHT" /><span
-                >%dhtEnabled%</span
+              <input
+                type="checkbox"
+                id="enableDHT"
+                name="enableDHT"
+                %enableDHT_checked%
+              /><span>%enableDHT_checked%</span
               ><br /><!-- todo: populate the checkboxes with current-state if it exists Sep22 2023-->
 
               <label for="enableMQTT">Enable MQTT</label>
-              <input type="checkbox" id="enableMQTT" name="enableMQTT" /><span
-                >%mqttEnabled%</span
-              ><br />
+              <input
+                type="checkbox"
+                id="enableMQTT"
+                name="enableMQTT"
+                %enableMQTT_checked%
+              /><span>%enableMQTT%</span><br />
 
               <!-- <label for="ip">IP Address</label>
             <input type="text" id ="ip" name="ip" value="192.168.1.200"><br>

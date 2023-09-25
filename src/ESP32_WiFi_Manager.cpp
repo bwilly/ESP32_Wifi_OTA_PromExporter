@@ -374,6 +374,66 @@ String processor(const String &var)
   {
     return readFile(SPIFFS, w1_3Path.c_str());
   }
+  else if (var == "enableW1")
+  {
+    return readFile(SPIFFS, enableW1Path.c_str());
+  }
+  else if (var == "enableDHT")
+  {
+    return readFile(SPIFFS, enableDHTPath.c_str());
+  }
+  else if (var == "enableMQTT")
+  {
+    return readFile(SPIFFS, enableMQTTPath.c_str());
+  }
+  else if (var == "enableW1_checked")
+  {
+    String fileValue = readFile(SPIFFS, enableW1Path.c_str());
+    if (fileValue == "true")
+    {
+      return "checked";
+    }
+    else if (fileValue == "false" || fileValue == "")
+    {
+      return "";
+    }
+  }
+  else if (var == "enableW1_checked")
+  {
+    String fileValue = readFile(SPIFFS, enableW1Path.c_str());
+    if (fileValue == "true")
+    {
+      return "checked";
+    }
+    else if (fileValue == "false" || fileValue == "")
+    {
+      return "";
+    }
+  }
+  else if (var == "enableDHT_checked")
+  {
+    String fileValue = readFile(SPIFFS, enableDHTPath.c_str());
+    if (fileValue == "true")
+    {
+      return "checked";
+    }
+    else if (fileValue == "false" || fileValue == "")
+    {
+      return "";
+    }
+  }
+  else if (var == "enableMQTT_checked")
+  {
+    String fileValue = readFile(SPIFFS, enableMQTTPath.c_str());
+    if (fileValue == "true")
+    {
+      return "checked";
+    }
+    else if (fileValue == "false" || fileValue == "")
+    {
+      return "";
+    }
+  }
   else
     return String();
 
@@ -633,7 +693,6 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
 
     server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
-  
 
     Serial.print("Setting root POST and delegating to handlePostParameters...");
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
