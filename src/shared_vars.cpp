@@ -13,4 +13,5 @@ bool dhtEnabled;
 bool mqttEnabled;
 String mainDelay;
 uint8_t w1Address[3][8];
+String w1Name[3];
 // uint8_t w1Sensors[];

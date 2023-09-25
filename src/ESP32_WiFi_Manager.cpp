@@ -120,6 +120,9 @@ const char *PARAM_MAIN_DELAY = "main-delay";
 const char *PARAM_W1_1 = "w1-1";
 const char *PARAM_W1_2 = "w1-2";
 const char *PARAM_W1_3 = "w1-3";
+const char *PARAM_W1_1_NAME = "w1-1-name";
+const char *PARAM_W1_2_NAME = "w1-2-name";
+const char *PARAM_W1_3_NAME = "w1-3-name";
 const char *PARAM_ENABLE_W1 = "enableW1";
 const char *PARAM_ENABLE_DHT = "enableDHT";
 const char *PARAM_ENABLE_MQTT = "enableMQTT";
@@ -140,6 +143,9 @@ String mainDelayPath = makePath(PARAM_MAIN_DELAY);
 String w1_1Path = makePath(PARAM_W1_1);
 String w1_2Path = makePath(PARAM_W1_2);
 String w1_3Path = makePath(PARAM_W1_3);
+String w1_1_name_Path = makePath(PARAM_W1_1_NAME);
+String w1_2_name_Path = makePath(PARAM_W1_2_NAME);
+String w1_3_name_Path = makePath(PARAM_W1_3_NAME);
 String enableW1Path = makePath(PARAM_ENABLE_W1);
 String enableDHTPath = makePath(PARAM_ENABLE_DHT);
 String enableMQTTPath = makePath(PARAM_ENABLE_MQTT);
@@ -181,13 +187,19 @@ String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
   ptr += "<body>\n";
   ptr += "<div id=\"webpage\">\n";
   ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
-  ptr += "<p>Living Room: ";
+  ptr += "<p>";
+  ptr += w1Name[0].c_str();
+  ptr += ": ";
   ptr += tempSensor1;
   ptr += "&deg;C</p>";
-  ptr += "<p>Bedroom: ";
+  ptr += "<p>";
+  ptr += w1Name[1].c_str();
+  ptr += ": ";
   ptr += tempSensor2;
   ptr += "&deg;C</p>";
-  ptr += "<p>Kitchen: ";
+  ptr += "<p>";
+  ptr += w1Name[2].c_str();
+  ptr += ": ";
   ptr += tempSensor3;
   ptr += "&deg;C</p>";
   ptr += "</div>\n";
@@ -374,6 +386,19 @@ String processor(const String &var)
   {
     return readFile(SPIFFS, w1_3Path.c_str());
   }
+  else if (var == "w1-1-name")
+  {
+    return readFile(SPIFFS, w1_1_name_Path.c_str());
+  }
+  else if (var == "w1-2-name")
+  {
+    return readFile(SPIFFS, w1_2_name_Path.c_str());
+  }
+  else if (var == "w1-3-name")
+  {
+    return readFile(SPIFFS, w1_3_name_Path.c_str());
+  }
+
   else if (var == "enableW1")
   {
     return readFile(SPIFFS, enableW1Path.c_str());
@@ -556,15 +581,19 @@ void setup()
   mqttServer = readFile(SPIFFS, mqttServerPath.c_str());
   mqttPort = readFile(SPIFFS, mqttPortPath.c_str());
   mainDelay = readFile(SPIFFS, mainDelayPath.c_str()).toInt();
-  bool w1Enabled = (readFile(SPIFFS, enableW1Path.c_str()) == "true");
-  bool dhtEnabled = (readFile(SPIFFS, enableDHTPath.c_str()) == "true");
-  bool mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
+  w1Enabled = (readFile(SPIFFS, enableW1Path.c_str()) == "true");
+  dhtEnabled = (readFile(SPIFFS, enableDHTPath.c_str()) == "true");
+  mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
 
   const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
   for (int i = 0; i < 3; i++)
   {
     loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
   }
+
+  w1Name[0] = readFile(SPIFFS, w1_1_name_Path.c_str());
+  w1Name[1] = readFile(SPIFFS, w1_2_name_Path.c_str());
+  w1Name[2] = readFile(SPIFFS, w1_3_name_Path.c_str());
 
   // ip = readFile(SPIFFS, ipPath);
   // gateway = readFile(SPIFFS, gatewayPath);
@@ -640,9 +669,9 @@ void setup()
                 sensors.requestTemperatures();
 
                 TemperatureReading readings[MAX_READINGS] = {
-                    {"RawWaterInput", sensors.getTempC(w1Address[0])},
-                    {"RawWaterExit", sensors.getTempC(w1Address[1])},
-                    {"EngineCoolantReturn", sensors.getTempC(w1Address[2])},
+                    {w1Name[0].c_str(), sensors.getTempC(w1Address[0])},
+                    {w1Name[1].c_str(), sensors.getTempC(w1Address[1])},
+                    {w1Name[2].c_str(), sensors.getTempC(w1Address[2])},
                     {} // Ending marker
                 };
 
@@ -781,10 +810,11 @@ void loop()
     previous_time = current_time;
   }
 
-  if (mqttEnabled)
-  {
-    Serial.println("publishTemperatureHumidity then sleep...");
-    publishTemperatureHumidity(client, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
-  }
+  // if (mqttEnabled)
+  // {
+  //   Serial.println("publishTemperatureHumidity then sleep...");
+  //   publishTemperatureHumidity(client, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
+  // }
+
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }

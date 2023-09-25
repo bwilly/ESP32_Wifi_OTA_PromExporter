@@ -29,13 +29,33 @@
               <input type="text" id="pinDht" name="pinDht" /><span
                 >%pinDht%</span
               ><br />
-              <label for="w1-1">OneWire ID 1(HEX)</label>
+
+              <label for="w1-1-name">w1-1 Name</label>
+              <input type="text" id="w1-1-name" name="w1-1-name" /><span
+                >%w1-1-name%</span
+              ><br />
+
+              <label for="w1-1"
+                >OneWire ID 1(HEX comma-delim wrapped by {})</label
+              >
               <input type="text" id="w1-1" name="w1-1" /><span>%w1-1%</span
               ><br />
-              <label for="w1-2">OneWire ID 2(HEX)</label>
+              <label for="w1-2-name">w1-2 Name</label>
+              <input type="text" id="w1-2-name" name="w1-2-name" /><span
+                >%w1-2-name%</span
+              ><br />
+              <label for="w1-2"
+                >OneWire ID 2(HEX comma-delim wrapped by {})</label
+              >
               <input type="text" id="w1-2" name="w1-2" /><span>%w1-2%</span
               ><br />
-              <label for="w1-3">OneWire ID 3(HEX)</label>
+              <label for="w1-3-name">w1-3 Name</label>
+              <input type="text" id="w1-3-name" name="w1-3-name" /><span
+                >%w1-3-name%</span
+              ><br />
+              <label for="w1-3"
+                >OneWire ID 3(HEX comma-delim wrapped by {})</label
+              >
               <input type="text" id="w1-3" name="w1-3" /><span>%w1-3%</span
               ><br />
               <label for="mqtt-server">mqtt-server</label>
@@ -57,7 +77,7 @@
                 id="enableW1"
                 name="enableW1"
                 %enableW1_checked%
-              /><span>%enableW1_checked%</span><br />
+              /><span>%enableW1%</span><br />
 
               <label for="enableDHT">Enable DHT</label>
               <input
@@ -65,7 +85,7 @@
                 id="enableDHT"
                 name="enableDHT"
                 %enableDHT_checked%
-              /><span>%enableDHT_checked%</span
+              /><span>%enableDHT%</span
               ><br /><!-- todo: populate the checkboxes with current-state if it exists Sep22 2023-->
 
               <label for="enableMQTT">Enable MQTT</label>

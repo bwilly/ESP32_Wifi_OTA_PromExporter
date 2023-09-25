@@ -82,6 +82,30 @@ void handlePostParameters(AsyncWebServerRequest *request)
                 // Write file to save value
                 writeFile(SPIFFS, mainDelayPath.c_str(), mainDelay.c_str());
             }
+            if (p->name() == PARAM_W1_1_NAME)
+            {
+                w1Name[0] = p->value().c_str();
+                Serial.print("PARAM_W1_1_NAME: ");
+                Serial.println(w1Name[0]);
+                // Write file to save value
+                writeFile(SPIFFS, w1_1_name_Path.c_str(), w1Name[0].c_str());
+            }
+            if (p->name() == PARAM_W1_2_NAME)
+            {
+                w1Name[1] = p->value().c_str();
+                Serial.print("PARAM_W1_2_NAME: ");
+                Serial.println(w1Name[1]);
+                // Write file to save value
+                writeFile(SPIFFS, w1_2_name_Path.c_str(), w1Name[1].c_str());
+            }
+            if (p->name() == PARAM_W1_3_NAME)
+            {
+                w1Name[2] = p->value().c_str();
+                Serial.print("PARAM_W1_3_NAME: ");
+                Serial.println(w1Name[2]);
+                // Write file to save value
+                writeFile(SPIFFS, w1_3_name_Path.c_str(), w1Name[2].c_str());
+            }
             if (p->name() == PARAM_W1_1)
             {
                 parseAndStoreHex(p->value(), 0);
