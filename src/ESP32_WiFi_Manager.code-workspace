@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"name": "MosquittoMQ",
+			"path": "../../MosquittoMQ"
+		}
+	],
+	"settings": {}
+}

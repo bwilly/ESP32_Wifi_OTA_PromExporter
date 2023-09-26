@@ -59,6 +59,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "SpiffsHandler.h"
 #include "DHT_SRL.h"
 #include "prometheus_srl.h"
+#include "HtmlVarProcessor.h"
 
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
@@ -70,11 +71,11 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define version "multiSensorSelection"
 
 // MQTT Server details
-const char *mqtt_server = "pi4-2.local"; // todo: change to config param
+const char *mqtt_server = "10.27.1.135"; // todo: change to config param
 const int mqtt_port = 1883;              // todo: change to config param
 
 WiFiClient espClient;
-PubSubClient client(espClient);
+PubSubClient mqClient(espClient);
 
 // #define DHTPIN 23 // Digital pin connected to the DHT sensor
 // const int DHTPIN;
@@ -108,48 +109,6 @@ DallasTemperature sensors(&oneWire);
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
-// Search for parameter in HTTP POST request
-// This value must match the name or ID of the HTML input control and the process() value for displaying the value in the manage page
-const char *PARAM_WIFI_SSID = "ssid";
-const char *PARAM_WIFI_PASS = "pass";
-const char *PARAM_LOCATION = "location";
-const char *PARAM_PIN_DHT = "pinDht"; // wish i could change name convention. see above comment
-const char *PARAM_MQTT_SERVER = "mqtt-server";
-const char *PARAM_MQTT_PORT = "mqtt-port";
-const char *PARAM_MAIN_DELAY = "main-delay";
-const char *PARAM_W1_1 = "w1-1";
-const char *PARAM_W1_2 = "w1-2";
-const char *PARAM_W1_3 = "w1-3";
-const char *PARAM_W1_1_NAME = "w1-1-name";
-const char *PARAM_W1_2_NAME = "w1-2-name";
-const char *PARAM_W1_3_NAME = "w1-3-name";
-const char *PARAM_ENABLE_W1 = "enableW1";
-const char *PARAM_ENABLE_DHT = "enableDHT";
-const char *PARAM_ENABLE_MQTT = "enableMQTT";
-
-String makePath(const char *param)
-{
-  return String("/") + param + ".txt";
-}
-
-// For SPIFFS
-String ssidPath = makePath(PARAM_WIFI_SSID);
-String passPath = makePath(PARAM_WIFI_PASS);
-String locationNamePath = makePath(PARAM_LOCATION);
-String pinDhtPath = makePath(PARAM_PIN_DHT);
-String mqttServerPath = makePath(PARAM_MQTT_SERVER);
-String mqttPortPath = makePath(PARAM_MQTT_PORT);
-String mainDelayPath = makePath(PARAM_MAIN_DELAY);
-String w1_1Path = makePath(PARAM_W1_1);
-String w1_2Path = makePath(PARAM_W1_2);
-String w1_3Path = makePath(PARAM_W1_3);
-String w1_1_name_Path = makePath(PARAM_W1_1_NAME);
-String w1_2_name_Path = makePath(PARAM_W1_2_NAME);
-String w1_3_name_Path = makePath(PARAM_W1_3_NAME);
-String enableW1Path = makePath(PARAM_ENABLE_W1);
-String enableDHTPath = makePath(PARAM_ENABLE_DHT);
-String enableMQTTPath = makePath(PARAM_ENABLE_MQTT);
-
 // IPAddress localIP;
 // IPAddress localIP(192, 168, 1, 200); // hardcoded
 
@@ -170,43 +129,6 @@ const int ledPin = 2;
 // Stores LED state
 
 String ledState;
-
-// PoC method.
-String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
-{
-  Serial.println(tempSensor1);
-
-  String ptr = "<!DOCTYPE html> <html>\n";
-  ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
-  ptr += "<title>ESP32 Temperature Monitor</title>\n";
-  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
-  ptr += "body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;}\n";
-  ptr += "p {font-size: 24px;color: #444444;margin-bottom: 10px;}\n";
-  ptr += "</style>\n";
-  ptr += "</head>\n";
-  ptr += "<body>\n";
-  ptr += "<div id=\"webpage\">\n";
-  ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
-  ptr += "<p>";
-  ptr += w1Name[0].c_str();
-  ptr += ": ";
-  ptr += tempSensor1;
-  ptr += "&deg;C</p>";
-  ptr += "<p>";
-  ptr += w1Name[1].c_str();
-  ptr += ": ";
-  ptr += tempSensor2;
-  ptr += "&deg;C</p>";
-  ptr += "<p>";
-  ptr += w1Name[2].c_str();
-  ptr += ": ";
-  ptr += tempSensor3;
-  ptr += "&deg;C</p>";
-  ptr += "</div>\n";
-  ptr += "</body>\n";
-  ptr += "</html>\n";
-  return ptr;
-}
 
 String printAddressAsString(DeviceAddress deviceAddress)
 {
@@ -232,6 +154,8 @@ void initSPIFFS()
     Serial.println("An error has occurred while mounting SPIFFS");
   }
   Serial.println("SPIFFS mounted successfully");
+
+  loadPersistedValues();
 }
 
 // Initialize WiFi
@@ -326,146 +250,6 @@ bool initDNS()
 
   AdvertiseServices();
   return true;
-}
-// Replaces placeholder with LED state value
-// Only used for printing info
-String processor(const String &var)
-{
-  Serial.println("process template token: ");
-  Serial.println(var);
-
-  if (var == "STATE") // this is from the example sample
-  {
-    if (digitalRead(ledPin))
-    {
-      ledState = "ON";
-    }
-    else
-    {
-      ledState = "OFF";
-    }
-    return ledState;
-  }
-  else if (var == "ssid")
-  {
-    return readFile(SPIFFS, ssidPath.c_str());
-  }
-  else if (var == "pass")
-  {
-    return readFile(SPIFFS, passPath.c_str());
-  }
-  else if (var == "location")
-  {
-    return readFile(SPIFFS, locationNamePath.c_str());
-  }
-  else if (var == "pinDht")
-  {
-    return readFile(SPIFFS, pinDhtPath.c_str());
-  }
-  else if (var == "mqtt-server")
-  {
-    return readFile(SPIFFS, mqttServerPath.c_str());
-  }
-  else if (var == "mqtt-port")
-  {
-    return readFile(SPIFFS, mqttPortPath.c_str());
-  }
-  else if (var == "main-delay")
-  {
-    return readFile(SPIFFS, mainDelayPath.c_str());
-  }
-  else if (var == "w1-1")
-  {
-    return readFile(SPIFFS, w1_1Path.c_str());
-  }
-  else if (var == "w1-2")
-  {
-    return readFile(SPIFFS, w1_2Path.c_str());
-  }
-  else if (var == "w1-3")
-  {
-    return readFile(SPIFFS, w1_3Path.c_str());
-  }
-  else if (var == "w1-1-name")
-  {
-    return readFile(SPIFFS, w1_1_name_Path.c_str());
-  }
-  else if (var == "w1-2-name")
-  {
-    return readFile(SPIFFS, w1_2_name_Path.c_str());
-  }
-  else if (var == "w1-3-name")
-  {
-    return readFile(SPIFFS, w1_3_name_Path.c_str());
-  }
-
-  else if (var == "enableW1")
-  {
-    return readFile(SPIFFS, enableW1Path.c_str());
-  }
-  else if (var == "enableDHT")
-  {
-    return readFile(SPIFFS, enableDHTPath.c_str());
-  }
-  else if (var == "enableMQTT")
-  {
-    return readFile(SPIFFS, enableMQTTPath.c_str());
-  }
-  else if (var == "enableW1_checked")
-  {
-    String fileValue = readFile(SPIFFS, enableW1Path.c_str());
-    if (fileValue == "true")
-    {
-      return "checked";
-    }
-    else if (fileValue == "false" || fileValue == "")
-    {
-      return "";
-    }
-  }
-  else if (var == "enableW1_checked")
-  {
-    String fileValue = readFile(SPIFFS, enableW1Path.c_str());
-    if (fileValue == "true")
-    {
-      return "checked";
-    }
-    else if (fileValue == "false" || fileValue == "")
-    {
-      return "";
-    }
-  }
-  else if (var == "enableDHT_checked")
-  {
-    String fileValue = readFile(SPIFFS, enableDHTPath.c_str());
-    if (fileValue == "true")
-    {
-      return "checked";
-    }
-    else if (fileValue == "false" || fileValue == "")
-    {
-      return "";
-    }
-  }
-  else if (var == "enableMQTT_checked")
-  {
-    String fileValue = readFile(SPIFFS, enableMQTTPath.c_str());
-    if (fileValue == "true")
-    {
-      return "checked";
-    }
-    else if (fileValue == "false" || fileValue == "")
-    {
-      return "";
-    }
-  }
-  else
-    return String();
-
-  // ssid = readFile(SPIFFS, ssidPath);
-  // pass = readFile(SPIFFS, passPath);
-  // locationName = readFile(SPIFFS, locationNamePath);
-  // pinDht = readFile(SPIFFS, pinDhtPath);
 }
 
 // Replaces placeholder with DHT values
@@ -571,19 +355,6 @@ void setup()
   // Serial.println("ledPin mode and digitalWrite...");
   // pinMode(ledPin, OUTPUT);
   // digitalWrite(ledPin, LOW);
-
-  // Load values saved in SPIFFS
-  Serial.println("loading SPIFFS values...");
-  ssid = readFile(SPIFFS, ssidPath.c_str());
-  pass = readFile(SPIFFS, passPath.c_str());
-  locationName = readFile(SPIFFS, locationNamePath.c_str());
-  pinDht = readFile(SPIFFS, pinDhtPath.c_str());
-  mqttServer = readFile(SPIFFS, mqttServerPath.c_str());
-  mqttPort = readFile(SPIFFS, mqttPortPath.c_str());
-  mainDelay = readFile(SPIFFS, mainDelayPath.c_str()).toInt();
-  w1Enabled = (readFile(SPIFFS, enableW1Path.c_str()) == "true");
-  dhtEnabled = (readFile(SPIFFS, enableDHTPath.c_str()) == "true");
-  mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
 
   const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
   for (int i = 0; i < 3; i++)
@@ -692,10 +463,11 @@ void setup()
 
     server.begin();
 
-    // todo: removeMe: reinstate
     // Set MQTT server
-    // Serial.println("Setting MQTT server...");
-    // client.setServer(mqtt_server, mqtt_port);
+    Serial.println("Setting MQTT server and port...");
+    Serial.println(mqtt_server);
+    Serial.println(mqtt_port);
+    mqClient.setServer(mqtt_server, mqtt_port);
 
     Serial.println("Entry setup loop complete.");
   }
@@ -736,37 +508,33 @@ void setup()
   }
 }
 
-// probably working this one to convert to prometheus output
-String SendHTMLxxx(void)
-{
+// void publishTemperatureHumidity(PubSubClient _client, float _temperature, float _humidity)
+// {
+//   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
+//   DynamicJsonDocument doc(capacity);
 
-  String ptr = "<!DOCTYPE html> <html>\n";
-  ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
-  ptr += "<title>ESP32 Temperature Monitor</title>\n";
-  ptr += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
-  ptr += "body{margin-top: 50px;} h1 {color: #444444;margin: 50px auto 30px;}\n";
-  ptr += "p {font-size: 24px;color: #444444;margin-bottom: 10px;}\n";
-  ptr += "</style>\n";
-  ptr += "</head>\n";
-  ptr += "<body>\n";
-  ptr += "<div id=\"webpage\">\n";
-  ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
-  ptr += "<p>Living Room: ";
+//   JsonObject obj1 = doc.createNestedObject();
+//   obj1["bn"] = "sensor:12345";
 
-  ptr += "&deg;C</p>";
-  ptr += "<p>Bedroom: ";
+//   JsonObject obj2 = doc.createNestedObject();
+//   obj2["n"] = "temperature";
+//   obj2["u"] = "C";
+//   obj2["v"] = _temperature;
+//   obj2["ut"] = (int)time(nullptr);
 
-  ptr += "&deg;C</p>";
-  ptr += "<p>Kitchen: ";
+//   JsonObject obj3 = doc.createNestedObject();
+//   obj3["n"] = "humidity";
+//   obj3["u"] = "%";
+//   obj3["v"] = _humidity;
+//   obj3["ut"] = (int)time(nullptr);
 
-  ptr += "&deg;C</p>";
-  ptr += "</div>\n";
-  ptr += "</body>\n";
-  ptr += "</html>\n";
-  return ptr;
-}
+//   char buffer[256];
+//   serializeJson(doc, buffer);
+//   _client.publish("ship/temperature", buffer);
+//   _client.publish("ship/humidity", buffer);
+// }
 
-void publishTemperatureHumidity(PubSubClient _client, float _temperature, float _humidity)
+void publishTemperatureHumidity(PubSubClient _client, String _temperature, String _humidity)
 {
   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
   DynamicJsonDocument doc(capacity);
@@ -780,16 +548,64 @@ void publishTemperatureHumidity(PubSubClient _client, float _temperature, float 
   obj2["v"] = _temperature;
   obj2["ut"] = (int)time(nullptr);
 
-  JsonObject obj3 = doc.createNestedObject();
-  obj3["n"] = "humidity";
-  obj3["u"] = "%";
-  obj3["v"] = _humidity;
-  obj3["ut"] = (int)time(nullptr);
+  // JsonObject obj3 = doc.createNestedObject();
+  // obj3["n"] = "humidity";
+  // obj3["u"] = "%";
+  // obj3["v"] = _humidity;
+  // obj3["ut"] = (int)time(nullptr);
 
   char buffer[256];
   serializeJson(doc, buffer);
+
+  Serial.print("Completed json serialization for queue publish. Now publishing...");
   _client.publish("ship/temperature", buffer);
-  _client.publish("ship/humidity", buffer);
+  // _client.publish("ship/humidity", buffer);
+}
+
+void reconnectMQ()
+{
+  while (!mqClient.connected())
+  {
+    Serial.print("Attempting MQTT connection...");
+    if (mqClient.connect(MakeMine(MDNS_DEVICE_NAME)))
+    {
+      Serial.println("connected");
+    }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(mqClient.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+
+void publishSimpleMessage()
+{
+  // Define the message and topic
+  const char *topic = "test/topic";
+  const char *message = "Hello World!";
+
+  // Publish the message
+  if (mqClient.connected())
+  {
+    if (mqClient.publish(topic, message))
+    {
+      Serial.println("Message published successfully.");
+    }
+    else
+    {
+      Serial.println("Message publishing failed.");
+    }
+  }
+  else
+  {
+    Serial.println("Not connected to MQTT broker.");
+    Serial.println(mqClient.state());
+
+    reconnectMQ();
+  }
 }
 
 void loop()
@@ -810,11 +626,23 @@ void loop()
     previous_time = current_time;
   }
 
-  // if (mqttEnabled)
-  // {
-  //   Serial.println("publishTemperatureHumidity then sleep...");
-  //   publishTemperatureHumidity(client, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
-  // }
+  if (mqttEnabled)
+  {
+    if (!mqClient.connected())
+    {
+      reconnectMQ();
+    }
+    mqClient.loop();
+
+    Serial.println("publishTemperatureHumidity then sleep...");
+    // publishTemperatureHumidity(mqClient, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
+    // publishTemperatureHumidity(mqClient, readDHTTemperature().c_str(), readDHTHumidity().c_str());
+
+    publishSimpleMessage();
+  }
+
+  Serial.print("Free heap: ");
+  Serial.println(ESP.getFreeHeap());
 
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }
