@@ -531,15 +531,9 @@ void setup()
   }
 }
 
-/**
- * Output Message
- *
- * [{"bn":"sensor:12345"},{"n":"temperature","u":"C","v":17.60000038,"ut":1139},{"n":"humidity","u":"%","v":69.30000305,"ut":1139}]
- *
- */
-void publishTemperatureHumidity(PubSubClient &_client, float _temperature, float _humidity)
+void publishTemperature(PubSubClient &_client, float _temperature)
 {
-  const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
+  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
   DynamicJsonDocument doc(capacity);
 
   JsonObject obj1 = doc.createNestedObject();
@@ -549,21 +543,72 @@ void publishTemperatureHumidity(PubSubClient &_client, float _temperature, float
   obj2["n"] = "temperature";
   obj2["u"] = "C";
   obj2["v"] = _temperature;
-  // obj2["v"] = static_cast<float>(_temperature);
   obj2["ut"] = (int)time(nullptr);
-
-  JsonObject obj3 = doc.createNestedObject();
-  obj3["n"] = "humidity";
-  obj3["u"] = "%";
-  obj3["v"] = _humidity;
-  // obj3["v"] = static_cast<float>(_humidity);
-  obj3["ut"] = (int)time(nullptr);
 
   char buffer[256];
   serializeJson(doc, buffer);
+
   _client.publish("ship/temperature", buffer);
+}
+
+void publishHumidity(PubSubClient &_client, float _humidity)
+{
+  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
+  DynamicJsonDocument doc(capacity);
+
+  JsonObject obj1 = doc.createNestedObject();
+  obj1["bn"] = "sensor:12345";
+
+  JsonObject obj2 = doc.createNestedObject();
+  obj2["n"] = "humidity";
+  obj2["u"] = "%";
+  obj2["v"] = _humidity;
+  obj2["ut"] = (int)time(nullptr);
+
+  char buffer[256];
+  serializeJson(doc, buffer);
+
   _client.publish("ship/humidity", buffer);
 }
+
+// Oct7, '23
+// Telegraf doesn't seem to be able to parse the senml with multiple measures
+/**
+ * Output Message
+ *
+ * [{"bn":"sensor:12345"},{"n":"temperature","u":"C","v":17.60000038,"ut":1139},{"n":"humidity","u":"%","v":69.30000305,"ut":1139}]
+ *
+ */
+// void publishTemperatureHumidity(PubSubClient &_client, float _temperature, float _humidity)
+// {
+//   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
+//   DynamicJsonDocument doc(capacity);
+
+//   JsonObject obj1 = doc.createNestedObject();
+//   obj1["bn"] = "sensor:12345";
+
+//   JsonObject obj2 = doc.createNestedObject();
+//   obj2["n"] = "temperature";
+//   obj2["u"] = "C";
+//   obj2["v"] = _temperature;
+//   // obj2["v"] = static_cast<float>(_temperature);
+//   obj2["ut"] = (int)time(nullptr);
+
+//   JsonObject obj3 = doc.createNestedObject();
+//   obj3["n"] = "humidity";
+//   obj3["u"] = "%";
+//   obj3["v"] = _humidity;
+//   // obj3["v"] = static_cast<float>(_humidity);
+//   obj3["ut"] = (int)time(nullptr);
+
+//   char buffer[256];
+//   serializeJson(doc, buffer);
+
+//   // _client.publish("ship/temperature", buffer);
+//   // _client.publish("ship/humidity", buffer);
+
+//   _client.publish("ship/climate", buffer);
+// }
 
 // void publishTemperatureHumidity(PubSubClient &_client, String _temperature, String _humidity)
 // {
@@ -687,11 +732,13 @@ void loop()
     unsigned long timeSinceLastPublish = currentMillis - lastPublishTime;
 
     bool shouldPublish = false;
+    bool shouldPublishTempt = false;
+    bool shouldPublishHumidity = false;
 
-        // Check temperature change criteria
+    // Check temperature change criteria
     if (tempChange >= PERCENTAGE_THRESHOLD)
     {
-      shouldPublish = true;
+      shouldPublishTempt = true;
     }
     Serial.print("Temperature changed from ");
     Serial.print(previousTemperature);
@@ -703,7 +750,7 @@ void loop()
     // Check humidity change criteria
     if (humidityChange >= PERCENTAGE_THRESHOLD)
     {
-      shouldPublish = true;
+      shouldPublishHumidity = true;
     }
     Serial.print("Humidity changed from ");
     Serial.print(previousHumidity);
@@ -725,10 +772,10 @@ void loop()
       Serial.println(" seconds.");
     }
 
-    if (shouldPublish)
+    if (shouldPublish || shouldPublishTempt)
     {
-      Serial.println("publishTemperatureHumidity then sleep...");
-      publishTemperatureHumidity(mqClient, currentTemperature, currentHumidity);
+      Serial.println("publishTemperature then sleep...");
+      publishTemperature(mqClient, currentTemperature);
 
       // Update the previous values after publishing
       previousTemperature = currentTemperature;
@@ -737,7 +784,21 @@ void loop()
     }
     else
     {
-      Serial.println("Skipping publish.");
+      Serial.println("Skipping publish temperature.");
+    }
+
+    if (shouldPublish || shouldPublishHumidity)
+    {
+      Serial.println("publishHumidity then sleep...");
+      publishHumidity(mqClient, currentHumidity);
+
+      // Update the previous values after publishing
+      previousHumidity = currentHumidity;
+      lastPublishTime = currentMillis;
+    }
+    else
+    {
+      Serial.println("Skipping publish humidity.");
     }
 
     Serial.print("Free heap: ");
