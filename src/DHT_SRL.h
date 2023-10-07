@@ -1,5 +1,5 @@
 #pragma once
 #include <Arduino.h>
 
-String readDHTTemperature();
-String readDHTHumidity();
+float readDHTTemperature();
+float readDHTHumidity();

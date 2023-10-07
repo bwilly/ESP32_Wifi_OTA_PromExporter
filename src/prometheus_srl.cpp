@@ -14,17 +14,19 @@ char buffer[1024];
 // void send_metrics(WiFiClient &client) {
 char *readAndGeneratePrometheusExport(const char *location)
 {
-    memset(buffer, 0, 1);
+    memset(buffer, 0, sizeof(buffer)); // clear the buffer
 
     strncat(buffer, "# HELP environ_tempt Environment temperature (in C).\n", 60);
     strncat(buffer, "# TYPE environ_tempt gauge\n", 30);
 
     strncat(buffer, "environ_tempt{location=\"", 50);
     strncat(buffer, location, 20);
-    strncat(buffer, "\"}", 3);
+    strncat(buffer, "\"} ", 4); // Note added space here
 
-    strncat(buffer, " ", 2);
-    strncat(buffer, readDHTTemperature().c_str(), 6);
+    char tempBuffer[10]; // Temporary buffer for temperature
+    float temperature = readDHTTemperature();
+    snprintf(tempBuffer, sizeof(tempBuffer), "%.2f", temperature);
+    strncat(buffer, tempBuffer, 6);
     strncat(buffer, "\n", 2);
 
     strncat(buffer, "# HELP environ_humidity Environment relative humidity (in percentage).\n", 99);
@@ -32,11 +34,13 @@ char *readAndGeneratePrometheusExport(const char *location)
 
     strncat(buffer, "environ_humidity{location=\"", 50);
     strncat(buffer, location, 20);
-    strncat(buffer, "\"}", 3);
+    strncat(buffer, "\"} ", 4); // Note added space here
 
-    strncat(buffer, " ", 2);
-    strncat(buffer, readDHTHumidity().c_str(), 6);
-    strncat(buffer, "\n", 3);
+    char humidityBuffer[10]; // Temporary buffer for humidity
+    float humidity = readDHTHumidity();
+    snprintf(humidityBuffer, sizeof(humidityBuffer), "%.2f", humidity);
+    strncat(buffer, humidityBuffer, 6);
+    strncat(buffer, "\n", 2);
 
     return buffer;
 }

@@ -77,6 +77,17 @@ const int mqtt_port = 1883;              // todo: change to config param
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
 
+const float PERCENTAGE_THRESHOLD = 1.0;               // Threshold set to 1%
+const unsigned long PUBLISH_INTERVAL = 5 * 60 * 1000; // Five minutes in milliseconds
+
+float previousTemperature = NAN;
+float previousHumidity = NAN;
+unsigned long lastPublishTime = 0;
+
+// Globals to store the last published values
+// float lastPublishedTemperature = NAN;
+// float lastPublishedHumidity = NAN;
+
 // #define DHTPIN 23 // Digital pin connected to the DHT sensor
 // const int DHTPIN;
 // TODO: allow pin and sensor type to be configurable
@@ -409,7 +420,11 @@ void setup()
               { request->send(200, "text/html", WiFi.BSSIDstr()); });
 
     server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", readDHTTemperature().c_str()); });
+              {
+                  char buffer[32];  // Buffer to hold the string representation of the temperature
+                  float temperature = readDHTTemperature();
+                  snprintf(buffer, sizeof(buffer), "%.2f", temperature);
+                  request->send(200, "text/html", buffer); });
 
     // copy/paste from setup section for AP -- changing URL path
     // todo: consolidate this copied code
@@ -461,6 +476,14 @@ void setup()
     // uses path like server.on("/update")
     AsyncElegantOTA.begin(&server);
 
+    configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity
+    time_t now;
+    while (!(time(&now)))
+    { // Wait for time to be set
+      Serial.println("Waiting for time...");
+      delay(1000);
+    }
+
     server.begin();
 
     // Set MQTT server
@@ -508,7 +531,41 @@ void setup()
   }
 }
 
-// void publishTemperatureHumidity(PubSubClient _client, float _temperature, float _humidity)
+/**
+ * Output Message
+ *
+ * [{"bn":"sensor:12345"},{"n":"temperature","u":"C","v":17.60000038,"ut":1139},{"n":"humidity","u":"%","v":69.30000305,"ut":1139}]
+ *
+ */
+void publishTemperatureHumidity(PubSubClient &_client, float _temperature, float _humidity)
+{
+  const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
+  DynamicJsonDocument doc(capacity);
+
+  JsonObject obj1 = doc.createNestedObject();
+  obj1["bn"] = "sensor:12345";
+
+  JsonObject obj2 = doc.createNestedObject();
+  obj2["n"] = "temperature";
+  obj2["u"] = "C";
+  obj2["v"] = _temperature;
+  // obj2["v"] = static_cast<float>(_temperature);
+  obj2["ut"] = (int)time(nullptr);
+
+  JsonObject obj3 = doc.createNestedObject();
+  obj3["n"] = "humidity";
+  obj3["u"] = "%";
+  obj3["v"] = _humidity;
+  // obj3["v"] = static_cast<float>(_humidity);
+  obj3["ut"] = (int)time(nullptr);
+
+  char buffer[256];
+  serializeJson(doc, buffer);
+  _client.publish("ship/temperature", buffer);
+  _client.publish("ship/humidity", buffer);
+}
+
+// void publishTemperatureHumidity(PubSubClient &_client, String _temperature, String _humidity)
 // {
 //   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
 //   DynamicJsonDocument doc(capacity);
@@ -530,37 +587,11 @@ void setup()
 
 //   char buffer[256];
 //   serializeJson(doc, buffer);
+
+//   Serial.print("Completed json serialization for queue publish. Now publishing...");
 //   _client.publish("ship/temperature", buffer);
 //   _client.publish("ship/humidity", buffer);
 // }
-
-void publishTemperatureHumidity(PubSubClient _client, String _temperature, String _humidity)
-{
-  const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
-  DynamicJsonDocument doc(capacity);
-
-  JsonObject obj1 = doc.createNestedObject();
-  obj1["bn"] = "sensor:12345";
-
-  JsonObject obj2 = doc.createNestedObject();
-  obj2["n"] = "temperature";
-  obj2["u"] = "C";
-  obj2["v"] = _temperature;
-  obj2["ut"] = (int)time(nullptr);
-
-  // JsonObject obj3 = doc.createNestedObject();
-  // obj3["n"] = "humidity";
-  // obj3["u"] = "%";
-  // obj3["v"] = _humidity;
-  // obj3["ut"] = (int)time(nullptr);
-
-  char buffer[256];
-  serializeJson(doc, buffer);
-
-  Serial.print("Completed json serialization for queue publish. Now publishing...");
-  _client.publish("ship/temperature", buffer);
-  // _client.publish("ship/humidity", buffer);
-}
 
 void reconnectMQ()
 {
@@ -608,6 +639,16 @@ void publishSimpleMessage()
   }
 }
 
+// Helper function to calculate percentage change
+float calculatePercentageChange(float oldValue, float newValue)
+{
+  if (isnan(oldValue) || oldValue == 0.0f)
+  {
+    return 100.0f; // Return 100% if old value is NaN or 0 to force an update
+  }
+  return abs((newValue - oldValue) / oldValue) * 100.0f;
+}
+
 void loop()
 {
   // does this need to be here? I didn't use it, here, on the new master project. maybe it was only needed for the non-async web server? bwilly Feb26'23
@@ -626,6 +667,7 @@ void loop()
     previous_time = current_time;
   }
 
+  // publishSimpleMessage(); // manual test
   if (mqttEnabled)
   {
     if (!mqClient.connected())
@@ -634,15 +676,75 @@ void loop()
     }
     mqClient.loop();
 
-    Serial.println("publishTemperatureHumidity then sleep...");
-    // publishTemperatureHumidity(mqClient, readDHTTemperature().toFloat(), readDHTHumidity().toFloat());
-    // publishTemperatureHumidity(mqClient, readDHTTemperature().c_str(), readDHTHumidity().c_str());
+    float currentTemperature = readDHTTemperature();
+    float currentHumidity = readDHTHumidity();
 
-    publishSimpleMessage();
+    // Calculate the percentage change from the previous values
+    float tempChange = calculatePercentageChange(previousTemperature, currentTemperature);
+    float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
+
+    unsigned long currentMillis = millis();
+    unsigned long timeSinceLastPublish = currentMillis - lastPublishTime;
+
+    bool shouldPublish = false;
+
+        // Check temperature change criteria
+    if (tempChange >= PERCENTAGE_THRESHOLD)
+    {
+      shouldPublish = true;
+    }
+    Serial.print("Temperature changed from ");
+    Serial.print(previousTemperature);
+    Serial.print(" to ");
+    Serial.print(currentTemperature);
+    Serial.print(". Percentage change: ");
+    Serial.print(tempChange);
+
+    // Check humidity change criteria
+    if (humidityChange >= PERCENTAGE_THRESHOLD)
+    {
+      shouldPublish = true;
+    }
+    Serial.print("Humidity changed from ");
+    Serial.print(previousHumidity);
+    Serial.print(" to ");
+    Serial.print(currentHumidity);
+    Serial.print(". Percentage change: ");
+    Serial.print(humidityChange);
+
+    // Check time interval criteria
+    if (timeSinceLastPublish >= PUBLISH_INTERVAL)
+    {
+      shouldPublish = true;
+      Serial.println("Time interval since last publish is greater than the defined threshold. Publishing...");
+    }
+    else
+    {
+      Serial.print("Time to next threshold publish: ");
+      Serial.print((PUBLISH_INTERVAL - timeSinceLastPublish) / 1000);
+      Serial.println(" seconds.");
+    }
+
+    if (shouldPublish)
+    {
+      Serial.println("publishTemperatureHumidity then sleep...");
+      publishTemperatureHumidity(mqClient, currentTemperature, currentHumidity);
+
+      // Update the previous values after publishing
+      previousTemperature = currentTemperature;
+      previousHumidity = currentHumidity;
+      lastPublishTime = currentMillis;
+    }
+    else
+    {
+      Serial.println("Skipping publish.");
+    }
+
+    Serial.print("Free heap: ");
+    Serial.println(ESP.getFreeHeap());
+
+    float temperature = temperatureRead();
+    Serial.println("Internal Temperature: " + String(temperature) + " C");
   }
-
-  Serial.print("Free heap: ");
-  Serial.println(ESP.getFreeHeap());
-
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }

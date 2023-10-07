@@ -24,8 +24,20 @@ void configDHT()
     }
 }
 
+float roundToHundredth(float number)
+{
+    return round(number * 100.0) / 100.0;
+}
+
+String floatToStringTwoDecimals(float value)
+{
+    char buffer[10];
+    snprintf(buffer, sizeof(buffer), "%.2f", value);
+    return String(buffer);
+}
+
 // DHT Temperature
-String readDHTTemperature()
+float readDHTTemperature()
 {
     Serial.println("readDHTTemperature...");
 
@@ -35,7 +47,7 @@ String readDHTTemperature()
         if (dht == nullptr)
         { // Double check after configDHT()
             Serial.println("DHT not configured correctly!");
-            return "--";
+            return NAN;
         }
     }
 
@@ -48,16 +60,18 @@ String readDHTTemperature()
     if (isnan(t))
     {
         Serial.println("Failed to read from DHT sensor!");
-        return "--";
+        return NAN;
     }
     else
     {
+        // Round to nearest hundredth
+        t = roundToHundredth(t);
         Serial.println(t);
-        return String(t);
+        return t;
     }
 }
 
-String readDHTHumidity()
+float readDHTHumidity()
 {
     Serial.println("readDHTHumidity...");
 
@@ -67,7 +81,7 @@ String readDHTHumidity()
         if (dht == nullptr)
         { // Double check after configDHT()
             Serial.println("DHT not configured correctly!");
-            return "--";
+            return NAN;
         }
     }
 
@@ -76,11 +90,13 @@ String readDHTHumidity()
     if (isnan(h))
     {
         Serial.println("Failed to read from DHT sensor!");
-        return "--";
+        return NAN;
     }
     else
     {
+        // Round to nearest hundredth
+        h = roundToHundredth(h);
         Serial.println(h);
-        return String(h);
+        return h;
     }
 }
