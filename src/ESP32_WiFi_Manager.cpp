@@ -82,7 +82,8 @@ const unsigned long PUBLISH_INTERVAL = 5 * 60 * 1000; // Five minutes in millise
 
 float previousTemperature = NAN;
 float previousHumidity = NAN;
-unsigned long lastPublishTime = 0;
+unsigned long lastPublishTime_tempt = 0;
+unsigned long lastPublishTime_humidity = 0;
 
 // Globals to store the last published values
 // float lastPublishedTemperature = NAN;
@@ -531,19 +532,17 @@ void setup()
   }
 }
 
-void publishTemperature(PubSubClient &_client, float _temperature)
+void publishTemperature(PubSubClient &_client, float _temperature, String location)
 {
   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
   DynamicJsonDocument doc(capacity);
 
-  JsonObject obj1 = doc.createNestedObject();
-  obj1["bn"] = "sensor:12345";
-
-  JsonObject obj2 = doc.createNestedObject();
-  obj2["n"] = "temperature";
-  obj2["u"] = "C";
-  obj2["v"] = _temperature;
-  obj2["ut"] = (int)time(nullptr);
+  JsonObject j = doc.createNestedObject();
+  j["bn"] = location;
+  j["n"] = "temperature";
+  j["u"] = "C";
+  j["v"] = _temperature;
+  j["ut"] = (int)time(nullptr);
 
   char buffer[256];
   serializeJson(doc, buffer);
@@ -551,19 +550,17 @@ void publishTemperature(PubSubClient &_client, float _temperature)
   _client.publish("ship/temperature", buffer);
 }
 
-void publishHumidity(PubSubClient &_client, float _humidity)
+void publishHumidity(PubSubClient &_client, float _humidity, String location)
 {
   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
   DynamicJsonDocument doc(capacity);
 
-  JsonObject obj1 = doc.createNestedObject();
-  obj1["bn"] = "sensor:12345";
-
-  JsonObject obj2 = doc.createNestedObject();
-  obj2["n"] = "humidity";
-  obj2["u"] = "%";
-  obj2["v"] = _humidity;
-  obj2["ut"] = (int)time(nullptr);
+  JsonObject j = doc.createNestedObject();
+  j["bn"] = location;
+  j["n"] = "humidity";
+  j["u"] = "%";
+  j["v"] = _humidity;
+  j["ut"] = (int)time(nullptr);
 
   char buffer[256];
   serializeJson(doc, buffer);
@@ -729,7 +726,8 @@ void loop()
     float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
 
     unsigned long currentMillis = millis();
-    unsigned long timeSinceLastPublish = currentMillis - lastPublishTime;
+    unsigned long greaterTime = (lastPublishTime_tempt > lastPublishTime_humidity) ? lastPublishTime_tempt : lastPublishTime_humidity;
+    unsigned long timeSinceLastPublish = currentMillis - greaterTime;
 
     bool shouldPublish = false;
     bool shouldPublishTempt = false;
@@ -775,12 +773,11 @@ void loop()
     if (shouldPublish || shouldPublishTempt)
     {
       Serial.println("publishTemperature then sleep...");
-      publishTemperature(mqClient, currentTemperature);
+      publishTemperature(mqClient, currentTemperature, locationName);
 
       // Update the previous values after publishing
       previousTemperature = currentTemperature;
-      previousHumidity = currentHumidity;
-      lastPublishTime = currentMillis;
+      lastPublishTime_tempt = currentMillis;
     }
     else
     {
@@ -790,11 +787,11 @@ void loop()
     if (shouldPublish || shouldPublishHumidity)
     {
       Serial.println("publishHumidity then sleep...");
-      publishHumidity(mqClient, currentHumidity);
+      publishHumidity(mqClient, currentHumidity, locationName);
 
       // Update the previous values after publishing
       previousHumidity = currentHumidity;
-      lastPublishTime = currentMillis;
+      lastPublishTime_humidity = currentMillis;
     }
     else
     {

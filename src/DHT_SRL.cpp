@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include <DHT_SRL.h>
 #include <DHT_U.h>
@@ -6,8 +5,10 @@
 
 #define DHTTYPE DHT22 // DHT 22 (AM2302)
 
-// DHT dht(DHTPIN, DHTTYPE);
 DHT *dht = nullptr; // global pointer declaration
+
+unsigned long lastSensorAccess = 0;                // Stores the last timestamp when the sensor was accessed
+const unsigned long SENSOR_ACCESS_INTERVAL = 2200; // 2 seconds + 10%
 
 void configDHT()
 {
@@ -36,67 +37,51 @@ String floatToStringTwoDecimals(float value)
     return String(buffer);
 }
 
-// DHT Temperature
-float readDHTTemperature()
+float readFromSensor(bool isTemperature)
 {
-    Serial.println("readDHTTemperature...");
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastSensorAccess < SENSOR_ACCESS_INTERVAL)
+    {
+        Serial.println("Sensor call too soon!");
+        return NAN;
+    }
+
+    lastSensorAccess = currentMillis; // update the last accessed timestamp
 
     if (dht == nullptr)
     {
         configDHT();
         if (dht == nullptr)
-        { // Double check after configDHT()
+        {
             Serial.println("DHT not configured correctly!");
             return NAN;
         }
     }
 
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    // Read temperature as Celsius (the default)
-    float t = dht->readTemperature();
-    // Read temperature as Fahrenheit (isFahrenheit = true)
-    // float t = dht.readTemperature(true);
-    // Check if any reads failed and exit early (to try again).
-    if (isnan(t))
+    float value = isTemperature ? dht->readTemperature() : dht->readHumidity();
+
+    if (isnan(value))
     {
         Serial.println("Failed to read from DHT sensor!");
         return NAN;
     }
     else
     {
-        // Round to nearest hundredth
-        t = roundToHundredth(t);
-        Serial.println(t);
-        return t;
+        value = roundToHundredth(value);
+        Serial.println(value);
+        return value;
     }
+}
+
+float readDHTTemperature()
+{
+    Serial.println("readDHTTemperature...");
+    return readFromSensor(true); // true indicates reading temperature
 }
 
 float readDHTHumidity()
 {
     Serial.println("readDHTHumidity...");
-
-    if (dht == nullptr)
-    {
-        configDHT();
-        if (dht == nullptr)
-        { // Double check after configDHT()
-            Serial.println("DHT not configured correctly!");
-            return NAN;
-        }
-    }
-
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    float h = dht->readHumidity();
-    if (isnan(h))
-    {
-        Serial.println("Failed to read from DHT sensor!");
-        return NAN;
-    }
-    else
-    {
-        // Round to nearest hundredth
-        h = roundToHundredth(h);
-        Serial.println(h);
-        return h;
-    }
+    return readFromSensor(false); // false indicates reading humidity
 }
