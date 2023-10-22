@@ -743,7 +743,7 @@ void loop()
     Serial.print(" to ");
     Serial.print(currentTemperature);
     Serial.print(". Percentage change: ");
-    Serial.print(tempChange);
+    Serial.println(tempChange);
 
     // Check humidity change criteria
     if (humidityChange >= PERCENTAGE_THRESHOLD)
@@ -755,7 +755,7 @@ void loop()
     Serial.print(" to ");
     Serial.print(currentHumidity);
     Serial.print(". Percentage change: ");
-    Serial.print(humidityChange);
+    Serial.println(humidityChange);
 
     // Check time interval criteria
     if (timeSinceLastPublish >= PUBLISH_INTERVAL)

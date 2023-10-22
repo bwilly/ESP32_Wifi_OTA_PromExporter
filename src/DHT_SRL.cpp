@@ -41,11 +41,12 @@ float readFromSensor(bool isTemperature)
 {
     unsigned long currentMillis = millis();
 
-    if (currentMillis - lastSensorAccess < SENSOR_ACCESS_INTERVAL)
-    {
-        Serial.println("Sensor call too soon!");
-        return NAN;
-    }
+    // This is not needed b/c the DHT.cpp has its own algorithm to prevent recurring reads too quickly
+    // if (currentMillis - lastSensorAccess < SENSOR_ACCESS_INTERVAL)
+    // {
+    //     Serial.println("Sensor call too soon!");
+    //     return NAN;
+    // }
 
     lastSensorAccess = currentMillis; // update the last accessed timestamp
 
