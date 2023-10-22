@@ -77,7 +77,8 @@ const int mqtt_port = 1883;              // todo: change to config param
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
 
-const float PERCENTAGE_THRESHOLD = 1.0;               // Threshold set to 1%
+const float THRESHOLD_TEMPERATURE_PERCENTAGE = 2.0;
+const float THRESHOLD_HUMIDITY_PERCENTAGE = 3.0;
 const unsigned long PUBLISH_INTERVAL = 5 * 60 * 1000; // Five minutes in milliseconds
 
 float previousTemperature = NAN;
@@ -725,16 +726,17 @@ void loop()
     float tempChange = calculatePercentageChange(previousTemperature, currentTemperature);
     float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
 
+    // Checking current time
     unsigned long currentMillis = millis();
-    unsigned long greaterTime = (lastPublishTime_tempt > lastPublishTime_humidity) ? lastPublishTime_tempt : lastPublishTime_humidity;
-    unsigned long timeSinceLastPublish = currentMillis - greaterTime;
 
-    bool shouldPublish = false;
+    unsigned long timeSinceLastPublishTempt = currentMillis - lastPublishTime_tempt;
+    unsigned long timeSinceLastPublishHumidity = currentMillis - lastPublishTime_humidity;
+
     bool shouldPublishTempt = false;
     bool shouldPublishHumidity = false;
 
     // Check temperature change criteria
-    if (tempChange >= PERCENTAGE_THRESHOLD)
+    if (tempChange >= THRESHOLD_TEMPERATURE_PERCENTAGE)
     {
       shouldPublishTempt = true;
     }
@@ -746,7 +748,7 @@ void loop()
     Serial.println(tempChange);
 
     // Check humidity change criteria
-    if (humidityChange >= PERCENTAGE_THRESHOLD)
+    if (humidityChange >= THRESHOLD_HUMIDITY_PERCENTAGE)
     {
       shouldPublishHumidity = true;
     }
@@ -757,22 +759,36 @@ void loop()
     Serial.print(". Percentage change: ");
     Serial.println(humidityChange);
 
-    // Check time interval criteria
-    if (timeSinceLastPublish >= PUBLISH_INTERVAL)
+    // Check time interval criteria for temperature
+    if (timeSinceLastPublishTempt >= PUBLISH_INTERVAL)
     {
-      shouldPublish = true;
-      Serial.println("Time interval since last publish is greater than the defined threshold. Publishing...");
+      shouldPublishTempt = true;
+      Serial.println("Time interval since last temperature publish is greater than the defined threshold. Publishing...");
     }
     else
     {
-      Serial.print("Time to next threshold publish: ");
-      Serial.print((PUBLISH_INTERVAL - timeSinceLastPublish) / 1000);
+      Serial.print("Time to next threshold publish for temperature: ");
+      Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishTempt) / 1000);
       Serial.println(" seconds.");
     }
 
-    if (shouldPublish || shouldPublishTempt)
+    // Check time interval criteria for humidity
+    if (timeSinceLastPublishHumidity >= PUBLISH_INTERVAL)
     {
-      Serial.println("publishTemperature then sleep...");
+      shouldPublishHumidity = true;
+      Serial.println("Time interval since last humidity publish is greater than the defined threshold. Publishing...");
+    }
+    else
+    {
+      Serial.print("Time to next threshold publish for humidity: ");
+      Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishHumidity) / 1000);
+      Serial.println(" seconds.");
+    }
+
+    // Publishing based on the individual checks
+    if (shouldPublishTempt)
+    {
+      Serial.println("publishTemperature...");
       publishTemperature(mqClient, currentTemperature, locationName);
 
       // Update the previous values after publishing
@@ -784,9 +800,9 @@ void loop()
       Serial.println("Skipping publish temperature.");
     }
 
-    if (shouldPublish || shouldPublishHumidity)
+    if (shouldPublishHumidity)
     {
-      Serial.println("publishHumidity then sleep...");
+      Serial.println("publishHumidity...");
       publishHumidity(mqClient, currentHumidity, locationName);
 
       // Update the previous values after publishing
@@ -797,12 +813,7 @@ void loop()
     {
       Serial.println("Skipping publish humidity.");
     }
-
-    Serial.print("Free heap: ");
-    Serial.println(ESP.getFreeHeap());
-
-    float temperature = temperatureRead();
-    Serial.println("Internal Temperature: " + String(temperature) + " C");
+    Serial.println("");
   }
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }
