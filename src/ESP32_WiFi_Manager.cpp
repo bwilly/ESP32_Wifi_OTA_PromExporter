@@ -77,8 +77,8 @@ const int mqtt_port = 1883;              // todo: change to config param
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
 
-const float THRESHOLD_TEMPERATURE_PERCENTAGE = 2.0;
-const float THRESHOLD_HUMIDITY_PERCENTAGE = 3.0;
+const float THRESHOLD_TEMPERATURE_PERCENTAGE = 3.0;
+const float THRESHOLD_HUMIDITY_PERCENTAGE = 4.0;
 const unsigned long PUBLISH_INTERVAL = 5 * 60 * 1000; // Five minutes in milliseconds
 
 float previousTemperature = NAN;
