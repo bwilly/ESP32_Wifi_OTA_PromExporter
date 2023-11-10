@@ -45,7 +45,7 @@ char *readAndGeneratePrometheusExport(const char *location)
     return buffer;
 }
 
-char *buildPrometheusMultiTemptExport(TemperatureReading readings[MAX_READINGS])
+char *buildPrometheusMultiTemptExport(TemperatureReading *readings)
 {
     static char buffer[1024];
     memset(buffer, 0, sizeof(buffer));
@@ -55,15 +55,15 @@ char *buildPrometheusMultiTemptExport(TemperatureReading readings[MAX_READINGS])
 
     for (int i = 0; i < MAX_READINGS; i++)
     {
-        if (readings[i].location.isEmpty())
+        if (readings[i].name.isEmpty())
             break;
 
         strncat(buffer, "environ_tempt{location=\"", sizeof(buffer) - strlen(buffer) - 1);
-        strncat(buffer, readings[i].location.c_str(), sizeof(buffer) - strlen(buffer) - 1);
+        strncat(buffer, readings[i].name.c_str(), sizeof(buffer) - strlen(buffer) - 1);
         strncat(buffer, "\"} ", sizeof(buffer) - strlen(buffer) - 1);
 
         char temperatureStr[8];
-        snprintf(temperatureStr, sizeof(temperatureStr), "%.2f", readings[i].temperature);
+        snprintf(temperatureStr, sizeof(temperatureStr), "%.2f", readings[i].value);
         strncat(buffer, temperatureStr, sizeof(buffer) - strlen(buffer) - 1);
         strncat(buffer, "\n", sizeof(buffer) - strlen(buffer) - 1);
     }

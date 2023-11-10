@@ -52,8 +52,8 @@ extern uint8_t w1Address[3][8];
 extern String w1Name[3];
 // extern uint8_t w1Sensor[3][8];
 // Building for first use by multiple DS18B20 sensors
-struct TemperatureReading
-{
-    String location; // or std::string location;
-    float temperature;
-};
+// struct TemperatureReading
+// {
+//     String location; // or std::string location;
+//     float temperature;
+// };

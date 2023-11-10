@@ -1,12 +1,11 @@
 #include "shared_vars.h"
 #include "SpiffsHandler.h"
 #include "SPIFFS.h"
+#include "TemperatureReading.h" // Make sure to include the header for TemperatureReading
 
 // PoC method.
-String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
+String SendHTML(TemperatureReading *readings, int numReadings)
 {
-    Serial.println(tempSensor1);
-
     String ptr = "<!DOCTYPE html> <html>\n";
     ptr += "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
     ptr += "<title>ESP32 Temperature Monitor</title>\n";
@@ -18,21 +17,16 @@ String SendHTML(float tempSensor1, float tempSensor2, float tempSensor3)
     ptr += "<body>\n";
     ptr += "<div id=\"webpage\">\n";
     ptr += "<h1>ESP32 Temperature Monitor</h1>\n";
-    ptr += "<p>";
-    ptr += w1Name[0].c_str();
-    ptr += ": ";
-    ptr += tempSensor1;
-    ptr += "&deg;C</p>";
-    ptr += "<p>";
-    ptr += w1Name[1].c_str();
-    ptr += ": ";
-    ptr += tempSensor2;
-    ptr += "&deg;C</p>";
-    ptr += "<p>";
-    ptr += w1Name[2].c_str();
-    ptr += ": ";
-    ptr += tempSensor3;
-    ptr += "&deg;C</p>";
+
+    for (int i = 0; i < numReadings; ++i)
+    {
+        ptr += "<p>";
+        ptr += readings[i].name;
+        ptr += ": ";
+        ptr += readings[i].value;
+        ptr += "&deg;C</p>";
+    }
+
     ptr += "</div>\n";
     ptr += "</body>\n";
     ptr += "</html>\n";
