@@ -60,7 +60,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "DHT_SRL.h"
 #include "prometheus_srl.h"
 #include "HtmlVarProcessor.h"
-
+#include "TemperatureSensor.h"
+#include "Config.h"
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "esp32-climate-sensor-"
 #define SERVICE_NAME "climate-http"
@@ -106,11 +107,15 @@ unsigned long lastPublishTime_humidity = 0;
 // Data wire is plugged into port 15 on the ESP32
 #define ONE_WIRE_BUS 23
 
-// Setup a oneWire instance to communicate with any OneWire devices
-OneWire oneWire(ONE_WIRE_BUS);
+// // Setup a oneWire instance to communicate with any OneWire devices
+// OneWire oneWire(ONE_WIRE_BUS);
 
-// Pass our oneWire reference to Dallas Temperature.
-DallasTemperature sensors(&oneWire);
+// // Pass our oneWire reference to Dallas Temperature.
+// DallasTemperature sensors(&oneWire);
+
+OneWire oneWire(ONE_WIRE_BUS);
+// Create a TemperatureSensor instance
+TemperatureSensor temptSensor(&oneWire); // Dallas
 
 // uint8_t w1[3][8] = {
 //     {0x28, 0xa0, 0x7b, 0x49, 0xf6, 0xde, 0x3c, 0xe9},
@@ -286,11 +291,12 @@ String printDS18b20(void)
 {
   String output = "";
 
-  sensors.begin();
+  // sensors.begin();
+  temptSensor.sensors.begin();
 
   output += "Locating devices...\n";
   output += "Found ";
-  deviceCount = sensors.getDeviceCount();
+  deviceCount = temptSensor.sensors.getDeviceCount();
   output += String(deviceCount, DEC);
   output += " devices.\n\n";
   output += "Printing addresses...\n";
@@ -300,7 +306,7 @@ String printDS18b20(void)
     output += "Sensor ";
     output += String(i + 1);
     output += " : ";
-    sensors.getAddress(Thermometer, i);
+    temptSensor.sensors.getAddress(Thermometer, i);
     // Assuming printAddress() returns a formatted string
     output += printAddressAsString(Thermometer);
   }
@@ -328,12 +334,13 @@ void setupDS18b20(void)
   // Serial.begin(115200);
 
   // Start up the library
-  sensors.begin();
+  // sensors.begin();
+  temptSensor.sensors.begin();
 
   // locate devices on the bus
   Serial.println("Locating devices...");
   Serial.print("Found ");
-  deviceCount = sensors.getDeviceCount();
+  deviceCount = temptSensor.sensors.getDeviceCount();
   Serial.print(deviceCount, DEC);
   Serial.println(" devices.");
   Serial.println("");
@@ -344,7 +351,7 @@ void setupDS18b20(void)
     Serial.print("Sensor ");
     Serial.print(i + 1);
     Serial.print(" : ");
-    sensors.getAddress(Thermometer, i);
+    temptSensor.sensors.getAddress(Thermometer, i);
     printAddress(Thermometer);
   }
 
@@ -446,22 +453,31 @@ void setup()
 
     // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
     server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
-              {           
-                sensors.requestTemperatures();                
-                request->send(200, "text/html", SendHTML(sensors.getTempC(w1Address[0]), sensors.getTempC(w1Address[1]), sensors.getTempC(w1Address[2]))); });
-    // request->send(200, "text/html", SendHTMLxxx()); });
+              {
+                temptSensor.requestTemperatures();
+                TemperatureReading *readings = temptSensor.getTemperatureReadings();
+
+                // Use the readings to send a response, assume SendHTML can handle TemperatureReading array
+                request->send(200, "text/html", SendHTML(readings, MAX_READINGS));
+
+                // sensors.requestTemperatures();
+                // request->send(200, "text/html", SendHTML(sensors.getTempC(w1Address[0]), sensors.getTempC(w1Address[1]), sensors.getTempC(w1Address[2]))); });
+                // request->send(200, "text/html", SendHTMLxxx());
+              });
 
     // todo: find out why some readings provide -127
     server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
               {           
-                sensors.requestTemperatures();
+                // sensors.requestTemperatures();
+                temptSensor.requestTemperatures();
+                TemperatureReading *readings = temptSensor.getTemperatureReadings();
 
-                TemperatureReading readings[MAX_READINGS] = {
-                    {w1Name[0].c_str(), sensors.getTempC(w1Address[0])},
-                    {w1Name[1].c_str(), sensors.getTempC(w1Address[1])},
-                    {w1Name[2].c_str(), sensors.getTempC(w1Address[2])},
-                    {} // Ending marker
-                };
+                // TemperatureReading readings[MAX_READINGS] = {
+                //     {w1Name[0].c_str(), sensors.getTempC(w1Address[0])},
+                //     {w1Name[1].c_str(), sensors.getTempC(w1Address[1])},
+                //     {w1Name[2].c_str(), sensors.getTempC(w1Address[2])},
+                //     {} // Ending marker
+                // };
 
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
@@ -496,9 +512,9 @@ void setup()
 
     Serial.println("Entry setup loop complete.");
   }
-  else // SETUP
-  {    // This path is meant to run only upon initial setup
-
+  else
+  // SETUP
+  { // This path is meant to run only upon initial setup
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
@@ -719,101 +735,120 @@ void loop()
     }
     mqClient.loop();
 
-    float currentTemperature = readDHTTemperature();
-    float currentHumidity = readDHTHumidity();
-
-    // Calculate the percentage change from the previous values
-    float tempChange = calculatePercentageChange(previousTemperature, currentTemperature);
-    float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
-
-    // Checking current time
-    unsigned long currentMillis = millis();
-
-    unsigned long timeSinceLastPublishTempt = currentMillis - lastPublishTime_tempt;
-    unsigned long timeSinceLastPublishHumidity = currentMillis - lastPublishTime_humidity;
-
-    bool shouldPublishTempt = false;
-    bool shouldPublishHumidity = false;
-
-    // Check temperature change criteria
-    if (tempChange >= THRESHOLD_TEMPERATURE_PERCENTAGE)
+    if (dhtEnabled)
     {
-      shouldPublishTempt = true;
-    }
-    Serial.print("Temperature changed from ");
-    Serial.print(previousTemperature);
-    Serial.print(" to ");
-    Serial.print(currentTemperature);
-    Serial.print(". Percentage change: ");
-    Serial.println(tempChange);
+      float currentTemperature = readDHTTemperature();
+      float currentHumidity = readDHTHumidity();
 
-    // Check humidity change criteria
-    if (humidityChange >= THRESHOLD_HUMIDITY_PERCENTAGE)
-    {
-      shouldPublishHumidity = true;
-    }
-    Serial.print("Humidity changed from ");
-    Serial.print(previousHumidity);
-    Serial.print(" to ");
-    Serial.print(currentHumidity);
-    Serial.print(". Percentage change: ");
-    Serial.println(humidityChange);
+      // Calculate the percentage change from the previous values
+      float tempChange = calculatePercentageChange(previousTemperature, currentTemperature);
+      float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
 
-    // Check time interval criteria for temperature
-    if (timeSinceLastPublishTempt >= PUBLISH_INTERVAL)
-    {
-      shouldPublishTempt = true;
-      Serial.println("Time interval since last temperature publish is greater than the defined threshold. Publishing...");
-    }
-    else
-    {
-      Serial.print("Time to next threshold publish for temperature: ");
-      Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishTempt) / 1000);
-      Serial.println(" seconds.");
-    }
+      // Checking current time
+      unsigned long currentMillis = millis();
 
-    // Check time interval criteria for humidity
-    if (timeSinceLastPublishHumidity >= PUBLISH_INTERVAL)
-    {
-      shouldPublishHumidity = true;
-      Serial.println("Time interval since last humidity publish is greater than the defined threshold. Publishing...");
-    }
-    else
-    {
-      Serial.print("Time to next threshold publish for humidity: ");
-      Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishHumidity) / 1000);
-      Serial.println(" seconds.");
-    }
+      unsigned long timeSinceLastPublishTempt = currentMillis - lastPublishTime_tempt;
+      unsigned long timeSinceLastPublishHumidity = currentMillis - lastPublishTime_humidity;
 
-    // Publishing based on the individual checks
-    if (shouldPublishTempt)
-    {
-      Serial.println("publishTemperature...");
-      publishTemperature(mqClient, currentTemperature, locationName);
+      bool shouldPublishTempt = false;
+      bool shouldPublishHumidity = false;
 
-      // Update the previous values after publishing
-      previousTemperature = currentTemperature;
-      lastPublishTime_tempt = currentMillis;
-    }
-    else
-    {
-      Serial.println("Skipping publish temperature.");
-    }
+      // Check temperature change criteria
+      if (tempChange >= THRESHOLD_TEMPERATURE_PERCENTAGE)
+      {
+        shouldPublishTempt = true;
+      }
+      Serial.print("Temperature changed from ");
+      Serial.print(previousTemperature);
+      Serial.print(" to ");
+      Serial.print(currentTemperature);
+      Serial.print(". Percentage change: ");
+      Serial.println(tempChange);
 
-    if (shouldPublishHumidity)
-    {
-      Serial.println("publishHumidity...");
-      publishHumidity(mqClient, currentHumidity, locationName);
+      // Check humidity change criteria
+      if (humidityChange >= THRESHOLD_HUMIDITY_PERCENTAGE)
+      {
+        shouldPublishHumidity = true;
+      }
+      Serial.print("Humidity changed from ");
+      Serial.print(previousHumidity);
+      Serial.print(" to ");
+      Serial.print(currentHumidity);
+      Serial.print(". Percentage change: ");
+      Serial.println(humidityChange);
 
-      // Update the previous values after publishing
-      previousHumidity = currentHumidity;
-      lastPublishTime_humidity = currentMillis;
+      // Check time interval criteria for temperature
+      if (timeSinceLastPublishTempt >= PUBLISH_INTERVAL)
+      {
+        shouldPublishTempt = true;
+        Serial.println("Time interval since last temperature publish is greater than the defined threshold. Publishing...");
+      }
+      else
+      {
+        Serial.print("Time to next threshold publish for temperature: ");
+        Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishTempt) / 1000);
+        Serial.println(" seconds.");
+      }
+
+      // Check time interval criteria for humidity
+      if (timeSinceLastPublishHumidity >= PUBLISH_INTERVAL)
+      {
+        shouldPublishHumidity = true;
+        Serial.println("Time interval since last humidity publish is greater than the defined threshold. Publishing...");
+      }
+      else
+      {
+        Serial.print("Time to next threshold publish for humidity: ");
+        Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishHumidity) / 1000);
+        Serial.println(" seconds.");
+      }
+
+      // Publishing based on the individual checks
+      if (shouldPublishTempt)
+      {
+        Serial.println("publishTemperature...");
+        publishTemperature(mqClient, currentTemperature, locationName);
+
+        // Update the previous values after publishing
+        previousTemperature = currentTemperature;
+        lastPublishTime_tempt = currentMillis;
+      }
+      else
+      {
+        Serial.println("Skipping publish temperature.");
+      }
+
+      if (shouldPublishHumidity)
+      {
+        Serial.println("publishHumidity...");
+        publishHumidity(mqClient, currentHumidity, locationName);
+
+        // Update the previous values after publishing
+        previousHumidity = currentHumidity;
+        lastPublishTime_humidity = currentMillis;
+      }
+      else
+      {
+        Serial.println("Skipping publish humidity.");
+      }
+      Serial.println("");
     }
-    else
-    {
-      Serial.println("Skipping publish humidity.");
-    }
-    Serial.println("");
   }
+
+  if (w1Enabled)
+  {
+    temptSensor.requestTemperatures();
+    TemperatureReading *readings = temptSensor.getTemperatureReadings(); // todo:performance: move declaration outside of the esp loop
+
+    for (int i = 0; i < MAX_READINGS; i++)
+    {
+      // Check if the reading is valid, e.g., by checking if the name is not empty
+      if (!readings[i].name.isEmpty())
+      {
+        publishTemperature(mqClient, readings[i].value, readings[i].name);
+      }
+    }
+  }
+
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }
