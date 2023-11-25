@@ -72,8 +72,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define version "multiSensorSelection"
 
 // MQTT Server details
-const char *mqtt_server = "10.27.1.135"; // todo: change to config param
-const int mqtt_port = 1883;              // todo: change to config param
+const char *mqtt_server = "192.168.68.120"; // todo: change to config param
+const int mqtt_port = 1883;                 // todo: change to config param
 
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
@@ -549,19 +549,36 @@ void setup()
   }
 }
 
+// void publishTemperature(PubSubClient &_client, float _temperature, String location)
+// {
+//   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
+//   DynamicJsonDocument doc(capacity);
+
+//   JsonObject j = doc.createNestedObject();
+//   j["bn"] = location;
+//   j["n"] = "temperature";
+//   j["u"] = "C";
+//   j["v"] = _temperature;
+//   j["ut"] = (int)time(nullptr);
+
+//   char buffer[256];
+//   serializeJson(doc, buffer);
+
+//   _client.publish("ship/temperature", buffer);
+// }
+
 void publishTemperature(PubSubClient &_client, float _temperature, String location)
 {
-  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
+  const size_t capacity = JSON_OBJECT_SIZE(10);
   DynamicJsonDocument doc(capacity);
 
-  JsonObject j = doc.createNestedObject();
-  j["bn"] = location;
-  j["n"] = "temperature";
-  j["u"] = "C";
-  j["v"] = _temperature;
-  j["ut"] = (int)time(nullptr);
+  doc["bn"] = location;
+  doc["n"] = "temperature";
+  doc["u"] = "C";
+  doc["v"] = _temperature;
+  doc["ut"] = (int)time(nullptr);
 
-  char buffer[256];
+  char buffer[512];
   serializeJson(doc, buffer);
 
   _client.publish("ship/temperature", buffer);
