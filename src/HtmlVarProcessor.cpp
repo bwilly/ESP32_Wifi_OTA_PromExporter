@@ -1,3 +1,5 @@
+// In HtmlVarProcessor.cpp
+#pragma once
 #include "shared_vars.h"
 #include "SpiffsHandler.h"
 #include "SPIFFS.h"
@@ -33,12 +35,16 @@ String SendHTML(TemperatureReading *readings, int numReadings)
     return ptr;
 }
 
-// Replaces placeholder with LED state value
-// Only used for printing info
 String processor(const String &var)
 {
-    Serial.println("process template token: ");
-    Serial.println(var);
+    // Iterate over paramList to find the matching parameter
+    for (const auto &paramMetadata : paramList)
+    {
+        if (var == paramMetadata.name)
+        {
+            return readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
+        }
+    }
 
     if (var == "STATE") // this is from the example sample
     {
@@ -52,124 +58,149 @@ String processor(const String &var)
         // }
         // return ledState;
     }
-    else if (var == "ssid")
-    {
-        return readFile(SPIFFS, ssidPath.c_str());
-    }
-    else if (var == "pass")
-    {
-        return readFile(SPIFFS, passPath.c_str());
-    }
-    else if (var == "location")
-    {
-        return readFile(SPIFFS, locationNamePath.c_str());
-    }
-    else if (var == "pinDht")
-    {
-        return readFile(SPIFFS, pinDhtPath.c_str());
-    }
-    else if (var == "mqtt-server")
-    {
-        return readFile(SPIFFS, mqttServerPath.c_str());
-    }
-    else if (var == "mqtt-port")
-    {
-        return readFile(SPIFFS, mqttPortPath.c_str());
-    }
-    else if (var == "main-delay")
-    {
-        return readFile(SPIFFS, mainDelayPath.c_str());
-    }
-    else if (var == "w1-1")
-    {
-        return readFile(SPIFFS, w1_1Path.c_str());
-    }
-    else if (var == "w1-2")
-    {
-        return readFile(SPIFFS, w1_2Path.c_str());
-    }
-    else if (var == "w1-3")
-    {
-        return readFile(SPIFFS, w1_3Path.c_str());
-    }
-    else if (var == "w1-1-name")
-    {
-        return readFile(SPIFFS, w1_1_name_Path.c_str());
-    }
-    else if (var == "w1-2-name")
-    {
-        return readFile(SPIFFS, w1_2_name_Path.c_str());
-    }
-    else if (var == "w1-3-name")
-    {
-        return readFile(SPIFFS, w1_3_name_Path.c_str());
-    }
+    // Handle special cases if any
+    // ...
 
-    else if (var == "enableW1")
-    {
-        return readFile(SPIFFS, enableW1Path.c_str());
-    }
-    else if (var == "enableDHT")
-    {
-        return readFile(SPIFFS, enableDHTPath.c_str());
-    }
-    else if (var == "enableMQTT")
-    {
-        return readFile(SPIFFS, enableMQTTPath.c_str());
-    }
-    else if (var == "enableW1_checked")
-    {
-        String fileValue = readFile(SPIFFS, enableW1Path.c_str());
-        if (fileValue == "true")
-        {
-            return "checked";
-        }
-        else if (fileValue == "false" || fileValue == "")
-        {
-            return "";
-        }
-    }
-    else if (var == "enableW1_checked")
-    {
-        String fileValue = readFile(SPIFFS, enableW1Path.c_str());
-        if (fileValue == "true")
-        {
-            return "checked";
-        }
-        else if (fileValue == "false" || fileValue == "")
-        {
-            return "";
-        }
-    }
-    else if (var == "enableDHT_checked")
-    {
-        String fileValue = readFile(SPIFFS, enableDHTPath.c_str());
-        if (fileValue == "true")
-        {
-            return "checked";
-        }
-        else if (fileValue == "false" || fileValue == "")
-        {
-            return "";
-        }
-    }
-    else if (var == "enableMQTT_checked")
-    {
-        String fileValue = readFile(SPIFFS, enableMQTTPath.c_str());
-        if (fileValue == "true")
-        {
-            return "checked";
-        }
-        else if (fileValue == "false" || fileValue == "")
-        {
-            return "";
-        }
-    }
-    else
-        return String();
-
-    // ssid = readFile(SPIFFS, ssidPath);
-    // pass = readFile(SPIFFS, passPath);
-    // locationName = readFile(SPIFFS, locationNamePath);
-    // pinDht = readFile(SPIFFS, pinDhtPath);
+    return String(); // Return an empty string if no match is found
 }
+
+// Replaces placeholder with LED state value
+// Only used for printing info
+// String processor(const String &var)
+// {
+//     Serial.println("process template token: ");
+//     Serial.println(var);
+
+//     if (var == "STATE") // this is from the example sample
+//     {
+//         // if (digitalRead(ledPin))
+//         // {
+//         //     ledState = "ON";
+//         // }
+//         // else
+//         // {
+//         //     ledState = "OFF";
+//         // }
+//         // return ledState;
+//     }
+//     else if (var == "ssid")
+//     {
+//         return readFile(SPIFFS, ssidPath.c_str());
+//     }
+//     else if (var == "pass")
+//     {
+//         return readFile(SPIFFS, passPath.c_str());
+//     }
+//     else if (var == "location")
+//     {
+//         return readFile(SPIFFS, locationNamePath.c_str());
+//     }
+//     else if (var == "pinDht")
+//     {
+//         return readFile(SPIFFS, pinDhtPath.c_str());
+//     }
+//     else if (var == "mqtt-server")
+//     {
+//         return readFile(SPIFFS, mqttServerPath.c_str());
+//     }
+//     else if (var == "mqtt-port")
+//     {
+//         return readFile(SPIFFS, mqttPortPath.c_str());
+//     }
+//     else if (var == "main-delay")
+//     {
+//         return readFile(SPIFFS, mainDelayPath.c_str());
+//     }
+//     else if (var == "w1-1")
+//     {
+//         return readFile(SPIFFS, w1_1Path.c_str());
+//     }
+//     else if (var == "w1-2")
+//     {
+//         return readFile(SPIFFS, w1_2Path.c_str());
+//     }
+//     else if (var == "w1-3")
+//     {
+//         return readFile(SPIFFS, w1_3Path.c_str());
+//     }
+//     else if (var == "w1-1-name")
+//     {
+//         return readFile(SPIFFS, w1_1_name_Path.c_str());
+//     }
+//     else if (var == "w1-2-name")
+//     {
+//         return readFile(SPIFFS, w1_2_name_Path.c_str());
+//     }
+//     else if (var == "w1-3-name")
+//     {
+//         return readFile(SPIFFS, w1_3_name_Path.c_str());
+//     }
+
+//     else if (var == "enableW1")
+//     {
+//         return readFile(SPIFFS, enableW1Path.c_str());
+//     }
+//     else if (var == "enableDHT")
+//     {
+//         return readFile(SPIFFS, enableDHTPath.c_str());
+//     }
+//     else if (var == "enableMQTT")
+//     {
+//         return readFile(SPIFFS, enableMQTTPath.c_str());
+//     }
+//     else if (var == "enableW1_checked")
+//     {
+//         String fileValue = readFile(SPIFFS, enableW1Path.c_str());
+//         if (fileValue == "true")
+//         {
+//             return "checked";
+//         }
+//         else if (fileValue == "false" || fileValue == "")
+//         {
+//             return "";
+//         }
+//     }
+//     else if (var == "enableW1_checked")
+//     {
+//         String fileValue = readFile(SPIFFS, enableW1Path.c_str());
+//         if (fileValue == "true")
+//         {
+//             return "checked";
+//         }
+//         else if (fileValue == "false" || fileValue == "")
+//         {
+//             return "";
+//         }
+//     }
+//     else if (var == "enableDHT_checked")
+//     {
+//         String fileValue = readFile(SPIFFS, enableDHTPath.c_str());
+//         if (fileValue == "true")
+//         {
+//             return "checked";
+//         }
+//         else if (fileValue == "false" || fileValue == "")
+//         {
+//             return "";
+//         }
+//     }
+//     else if (var == "enableMQTT_checked")
+//     {
+//         String fileValue = readFile(SPIFFS, enableMQTTPath.c_str());
+//         if (fileValue == "true")
+//         {
+//             return "checked";
+//         }
+//         else if (fileValue == "false" || fileValue == "")
+//         {
+//             return "";
+//         }
+//     }
+//     else
+//         return String();
+
+//     // ssid = readFile(SPIFFS, ssidPath);
+//     // pass = readFile(SPIFFS, passPath);
+//     // locationName = readFile(SPIFFS, locationNamePath);
+//     // pinDht = readFile(SPIFFS, pinDhtPath);
+// }

@@ -376,15 +376,40 @@ void setup()
   // pinMode(ledPin, OUTPUT);
   // digitalWrite(ledPin, LOW);
 
-  const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
-  for (int i = 0; i < 3; i++)
-  {
-    loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
-  }
+  // const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
+  // for (int i = 0; i < 3; i++)
+  // {
+  //   loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
+  // }
 
-  w1Name[0] = readFile(SPIFFS, w1_1_name_Path.c_str());
-  w1Name[1] = readFile(SPIFFS, w1_2_name_Path.c_str());
-  w1Name[2] = readFile(SPIFFS, w1_3_name_Path.c_str());
+  // w1Name[0] = readFile(SPIFFS, w1_1_name_Path.c_str());
+  // w1Name[1] = readFile(SPIFFS, w1_2_name_Path.c_str());
+  // w1Name[2] = readFile(SPIFFS, w1_3_name_Path.c_str());
+
+  // Load parameters from SPIFFS using paramList
+  // replaces commented out code directly above
+  for (const auto &paramMetadata : paramList)
+  {
+    if (paramMetadata.name.startsWith("w1-"))
+    {
+      // If the parameter name starts with "w1-", it's related to w1Address or w1Name
+      if (paramMetadata.name.endsWith("-name"))
+      {
+        // This is a w1Name parameter
+        int index = (paramMetadata.name == "w1-1-name") ? 0 : (paramMetadata.name == "w1-2-name") ? 1
+                                                                                                  : 2;
+        w1Name[index] = readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
+      }
+      else
+      {
+        // This is a w1Address parameter
+        int index = (paramMetadata.name == "w1-1") ? 0 : (paramMetadata.name == "w1-2") ? 1
+                                                                                        : 2;
+        loadW1AddressFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), index);
+      }
+    }
+    // Add else if blocks here for loading other specific parameter types if needed
+  }
 
   // ip = readFile(SPIFFS, ipPath);
   // gateway = readFile(SPIFFS, gatewayPath);
@@ -518,7 +543,7 @@ void setup()
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
-    WiFi.softAP("ESP-WIFI-MANAGER", "saltmeadow"); // name and password
+    WiFi.softAP("srlESP-WIFI-MANAGER", "saltmeadow"); // name and password
 
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
