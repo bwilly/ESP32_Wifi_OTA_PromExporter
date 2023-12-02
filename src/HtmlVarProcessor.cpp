@@ -40,6 +40,25 @@ String processor(const String &var)
     // Iterate over paramList to find the matching parameter
     for (const auto &paramMetadata : paramList)
     {
+        if (var == paramMetadata.name && paramMetadata.type == ParamMetadata::BOOLEAN)
+        {
+
+            String fileVal = readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
+
+            Serial.print("Reading ");
+            Serial.println(paramMetadata.name);
+            Serial.print("Value: ");
+            Serial.println(fileVal);
+
+            if (fileVal == "true")
+            {
+                return "checked";
+            }
+            else
+            {
+                return "";
+            }
+        }
         if (var == paramMetadata.name)
         {
             return readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
@@ -61,7 +80,20 @@ String processor(const String &var)
     // Handle special cases if any
     // ...
 
-    return String(); // Return an empty string if no match is found
+    else if (var == "enableW1_checked")
+        //     {
+        //         String fileValue = readFile(SPIFFS, enableW1Path.c_str());
+        //         if (fileValue == "true")
+        //         {
+        //             return "checked";
+        //         }
+        //         else if (fileValue == "false" || fileValue == "")
+        //         {
+        //             return "";
+        //         }
+        //     }
+
+        return String(); // Return an empty string if no match is found
 }
 
 // Replaces placeholder with LED state value

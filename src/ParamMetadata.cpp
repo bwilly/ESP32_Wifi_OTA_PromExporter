@@ -13,8 +13,9 @@ std::vector<ParamMetadata> paramList = {
     {"pinDht", makePath(PARAM_PIN_DHT), ParamMetadata::STRING},
     {"mqtt-server", makePath(PARAM_MQTT_SERVER), ParamMetadata::STRING},
     {"mqtt-port", makePath(PARAM_MQTT_PORT), ParamMetadata::STRING},
-    {"main-delay", makePath(PARAM_MAIN_DELAY), ParamMetadata::NUMBER}, // Assuming this is a numeric value
-    {"w1-1", makePath(PARAM_W1_1), ParamMetadata::STRING},             // or NUMBER if it is numeric
+    // {"main-delay", makePath(PARAM_MAIN_DELAY), ParamMetadata::NUMBER},
+    {"main-delay", makePath(PARAM_MAIN_DELAY), ParamMetadata::STRING},
+    {"w1-1", makePath(PARAM_W1_1), ParamMetadata::STRING},
     {"w1-2", makePath(PARAM_W1_2), ParamMetadata::STRING},
     {"w1-3", makePath(PARAM_W1_3), ParamMetadata::STRING},
     {"w1-1-name", makePath(PARAM_W1_1_NAME), ParamMetadata::STRING},

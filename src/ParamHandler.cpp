@@ -37,61 +37,161 @@ void handlePostParameters(AsyncWebServerRequest *request)
 {
     for (const auto &paramMetadata : paramList)
     {
-        if (request->hasParam(paramMetadata.name.c_str(), true))
+        String value;
+        bool paramFound = request->hasParam(paramMetadata.name.c_str(), true);
+
+        if (paramMetadata.type == ParamMetadata::STRING)
         {
-            AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
-
-            if (paramMetadata.type == ParamMetadata::STRING)
+            if (paramFound)
             {
-                // Handle String type
-                if (paramToVariableMap.find(paramMetadata.name) != paramToVariableMap.end())
+                AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
+                value = p->value();
+                if (!value.isEmpty())
                 {
-                    *(paramToVariableMap[paramMetadata.name]) = p->value().c_str();
+                    *(paramToVariableMap[paramMetadata.name]) = value;
+                    writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), value.c_str());
                 }
             }
-            else if (paramMetadata.type == ParamMetadata::BOOLEAN)
-            {
-                // Handle Boolean type
-                if (paramToBoolMap.find(paramMetadata.name) != paramToBoolMap.end())
-                {
-                    *(paramToBoolMap[paramMetadata.name]) = (p->value() == "true" || p->value() == "on");
-                }
-            }
-            // else if (paramMetadata.type == ParamMetadata::NUMBER)
-            // {
-            //     // Handle Number type
-            //     if (paramToIntMap.find(paramMetadata.name) != paramToIntMap.end())
-            //     {
-            //         *(paramToIntMap[paramMetadata.name]) = p->value().toInt();
-            //     }
-            // }
-
-            if (paramMetadata.name == "w1-1" || paramMetadata.name == "w1-2" || paramMetadata.name == "w1-3")
-            {
-                // Special handling for w1Address array
-                int index = (paramMetadata.name == "w1-1") ? 0 : (paramMetadata.name == "w1-2") ? 1
-                                                                                                : 2;
-                parseHexToArray_dup(p->value(), w1Address[index]);
-            }
-
-            // Special handling for w1Name array
-            if (paramMetadata.name == PARAM_W1_1_NAME)
-            {
-                w1Name[0] = p->value().c_str();
-            }
-            else if (paramMetadata.name == PARAM_W1_2_NAME)
-            {
-                w1Name[1] = p->value().c_str();
-            }
-            else if (paramMetadata.name == PARAM_W1_3_NAME)
-            {
-                w1Name[2] = p->value().c_str();
-            }
-
-            writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), p->value().c_str());
         }
+        else if (paramMetadata.type == ParamMetadata::BOOLEAN)
+        {
+            Serial.print("Saving param: ");
+            Serial.println(paramMetadata.name);
+
+            // Checkboxes are a special case. If the parameter is not found, it means the checkbox was not checked.
+            bool isChecked = paramFound && request->getParam(paramMetadata.name.c_str(), true)->value() == "on";
+            // bool isChecked = request->getParam(paramMetadata.name.c_str(), true)->value() == "on";
+            *(paramToBoolMap[paramMetadata.name]) = isChecked;
+            writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), isChecked ? "true" : "false");
+        }
+        // ... additional handling for other types
+        // Now, save these to SPIFFS regardless of whether they were received in the POST or not.
+        // writeFile(SPIFFS, enableW1Path.c_str(), enableW1 ? "true" : "false");
+        // writeFile(SPIFFS, enableDHTPath.c_str(), enableDHT ? "true" : "false");
+        // writeFile(SPIFFS, enableMQTTPath.c_str(), enableMQTT ? "true" : "false");
+
+        // Special handling for complex types like w1Address and w1Name
+        // ...
     }
 }
+
+// void handlePostParameters(AsyncWebServerRequest *request)
+// {
+//     for (const auto &paramMetadata : paramList)
+//     {
+//         if (request->hasParam(paramMetadata.name.c_str(), true))
+//         {
+//             AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
+//             String value = p->value();
+
+//             if (paramMetadata.type == ParamMetadata::STRING)
+//             {
+//                 // Handle String type
+//                 if (paramToVariableMap.find(paramMetadata.name) != paramToVariableMap.end())
+//                 {
+//                     *(paramToVariableMap[paramMetadata.name]) = value;
+//                 }
+//             }
+//             else if (paramMetadata.type == ParamMetadata::BOOLEAN)
+//             {
+//                 // Handle Boolean type
+//                 if (paramToBoolMap.find(paramMetadata.name) != paramToBoolMap.end())
+//                 {
+//                     *(paramToBoolMap[paramMetadata.name]) = (value == "true" || value == "on");
+//                 }
+//             }
+//             // ... additional handling for other types
+
+//             // Special handling for w1Address array
+//             if (paramMetadata.name == "w1-1" || paramMetadata.name == "w1-2" || paramMetadata.name == "w1-3")
+//             {
+//                 int index = (paramMetadata.name == "w1-1") ? 0 : (paramMetadata.name == "w1-2") ? 1
+//                                                                                                 : 2;
+//                 parseHexToArray_dup(value, w1Address[index]);
+//             }
+
+//             // Special handling for w1Name array
+//             if (paramMetadata.name == PARAM_W1_1_NAME)
+//             {
+//                 w1Name[0] = value;
+//             }
+//             else if (paramMetadata.name == PARAM_W1_2_NAME)
+//             {
+//                 w1Name[1] = value;
+//             }
+//             else if (paramMetadata.name == PARAM_W1_3_NAME)
+//             {
+//                 w1Name[2] = value;
+//             }
+
+//             // Write to file only if the value is non-empty
+//             if (!value.isEmpty())
+//             {
+//                 writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), value.c_str());
+//             }
+//         }
+//     }
+// }
+
+// void handlePostParameters(AsyncWebServerRequest *request)
+// {
+//     for (const auto &paramMetadata : paramList)
+//     {
+//         if (request->hasParam(paramMetadata.name.c_str(), true))
+//         {
+//             AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
+
+//             if (paramMetadata.type == ParamMetadata::STRING)
+//             {
+//                 // Handle String type
+//                 if (paramToVariableMap.find(paramMetadata.name) != paramToVariableMap.end())
+//                 {
+//                     *(paramToVariableMap[paramMetadata.name]) = p->value().c_str();
+//                 }
+//             }
+//             else if (paramMetadata.type == ParamMetadata::BOOLEAN)
+//             {
+//                 // Handle Boolean type
+//                 if (paramToBoolMap.find(paramMetadata.name) != paramToBoolMap.end())
+//                 {
+//                     *(paramToBoolMap[paramMetadata.name]) = (p->value() == "true" || p->value() == "on");
+//                 }
+//             }
+//             // else if (paramMetadata.type == ParamMetadata::NUMBER)
+//             // {
+//             //     // Handle Number type
+//             //     if (paramToIntMap.find(paramMetadata.name) != paramToIntMap.end())
+//             //     {
+//             //         *(paramToIntMap[paramMetadata.name]) = p->value().toInt();
+//             //     }
+//             // }
+
+//             if (paramMetadata.name == "w1-1" || paramMetadata.name == "w1-2" || paramMetadata.name == "w1-3")
+//             {
+//                 // Special handling for w1Address array
+//                 int index = (paramMetadata.name == "w1-1") ? 0 : (paramMetadata.name == "w1-2") ? 1
+//                                                                                                 : 2;
+//                 parseHexToArray_dup(p->value(), w1Address[index]);
+//             }
+
+//             // Special handling for w1Name array
+//             if (paramMetadata.name == PARAM_W1_1_NAME)
+//             {
+//                 w1Name[0] = p->value().c_str();
+//             }
+//             else if (paramMetadata.name == PARAM_W1_2_NAME)
+//             {
+//                 w1Name[1] = p->value().c_str();
+//             }
+//             else if (paramMetadata.name == PARAM_W1_3_NAME)
+//             {
+//                 w1Name[2] = p->value().c_str();
+//             }
+
+//             writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), p->value().c_str());
+//         }
+//     }
+// }
 
 // void handlePostParameters(AsyncWebServerRequest *request)
 // {

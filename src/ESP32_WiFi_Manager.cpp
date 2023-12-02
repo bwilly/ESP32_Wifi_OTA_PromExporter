@@ -416,7 +416,6 @@ void setup()
   Serial.println(ssid);
   Serial.println(pass);
   Serial.println(locationName);
-  Serial.println(pinDht);
   // Serial.println(ip);
   // Serial.println(gateway);
 

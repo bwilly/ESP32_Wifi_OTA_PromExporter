@@ -54,4 +54,5 @@ std::map<String, String *> paramToVariableMap = {
 std::map<String, bool *> paramToBoolMap = {
     {"enableW1", &w1Enabled},
     {"enableDHT", &dhtEnabled},
-    {"mqttEnabled", &mqttEnabled}};
+    // {"mqttEnabled", &mqttEnabled}};
+    {"enableMQTT", &mqttEnabled}};
