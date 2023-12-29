@@ -72,8 +72,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define version "multiSensorSelection"
 
 // MQTT Server details
-const char *mqtt_server = "192.168.68.120"; // todo: change to config param
-const int mqtt_port = 1883;                 // todo: change to config param
+// const char *mqtt_server = "192.168.68.120"; // todo: change to config param
+// const int mqtt_port = 1883;                 // todo: change to config param
 
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
@@ -530,9 +530,22 @@ void setup()
 
     // Set MQTT server
     Serial.println("Setting MQTT server and port...");
-    Serial.println(mqtt_server);
-    Serial.println(mqtt_port);
-    mqClient.setServer(mqtt_server, mqtt_port);
+    Serial.println(*paramToVariableMap["mqtt-server"]);
+    Serial.println(*paramToVariableMap["mqtt-port"]);
+
+    if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
+        paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
+    {
+
+      const char *server = paramToVariableMap["mqtt-server"]->c_str();
+      int port = paramToVariableMap["mqtt-port"]->toInt();
+
+      mqClient.setServer(server, port);
+    }
+    else
+    {
+      Serial.println("Error setting MQTT from params.");
+    }
 
     Serial.println("Entry setup loop complete.");
   }

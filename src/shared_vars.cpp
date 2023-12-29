@@ -35,7 +35,7 @@ bool w1Enabled;
 bool dhtEnabled;
 bool mqttEnabled;
 String mainDelay;
-uint8_t w1Address[3][8]; // accounted for in ParamHandler.cpp
+uint8_t w1Address[3][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023
 String w1Name[3];
 
 // uint8_t w1Sensors[];
