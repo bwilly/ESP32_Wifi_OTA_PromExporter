@@ -69,7 +69,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
 
-#define version "multiSensorSelection"
+#define version "may26-2024:zabbix-agent:4"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -127,6 +127,9 @@ TemperatureSensor temptSensor(&oneWire); // Dallas
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
+// New Zabbix agent server on port 10050
+AsyncWebServer zabbixServer(10050);
+
 // IPAddress localIP;
 // IPAddress localIP(192, 168, 1, 200); // hardcoded
 
@@ -147,6 +150,47 @@ const int ledPin = 2;
 // Stores LED state
 
 String ledState;
+
+// Function to handle Zabbix agent.ping
+void handleZabbixPing(AsyncWebServerRequest *request)
+{
+  request->send(200, "text/plain", "1");
+}
+
+// Function to handle Zabbix agent.version
+void handleZabbixVersion(AsyncWebServerRequest *request)
+{
+  request->send(200, "text/plain", "ESP32 Zabbix Agent v1.0");
+}
+
+// Function to handle system.uptime
+void handleSystemUptime(AsyncWebServerRequest *request)
+{
+  static unsigned long startTime = millis();
+  // unsigned long uptime = (millis() - startTime) / 1000; // uptime in seconds
+  unsigned long uptime = 99999; // uptime in seconds todo: get real uptime via esp32 api
+  request->send(200, "text/plain", String(uptime));
+}
+
+// Function to handle vm.memory.size[available]
+void handleAvailableMemory(AsyncWebServerRequest *request)
+{
+  // Placeholder value for available memory
+  // Implement actual memory reading logic if possible
+  int availableMemory = 1024; // example value in bytes
+  request->send(200, "text/plain", String(availableMemory));
+}
+
+// Function to initialize the Zabbix agent server
+void initZabbixServer()
+{
+  zabbixServer.on("/", HTTP_GET, handleZabbixPing);
+  zabbixServer.on("/agent.version", HTTP_GET, handleZabbixVersion);
+  zabbixServer.on("/system.uptime", HTTP_GET, handleSystemUptime);
+  zabbixServer.on("/vm.memory.size[available]", HTTP_GET, handleAvailableMemory);
+  zabbixServer.begin();
+  Serial.println("Zabbix agent server started on port 10050");
+}
 
 String printAddressAsString(DeviceAddress deviceAddress)
 {
@@ -424,6 +468,9 @@ void setup()
     Serial.println("initDNS...");
     initDNS();
 
+    // Initialize Zabbix agent server
+    initZabbixServer();
+
     Serial.println("set web root /index.html...");
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -546,7 +593,6 @@ void setup()
     {
       Serial.println("Error setting MQTT from params.");
     }
-
     Serial.println("Entry setup loop complete.");
   }
   else
@@ -618,7 +664,7 @@ void publishTemperature(PubSubClient &_client, float _temperature, String locati
   char buffer[512];
   serializeJson(doc, buffer);
 
-  _client.publish("ship/temperature", buffer);
+  _client.publish("ship/temperature", buffer); // todo: externalize
 }
 
 void publishHumidity(PubSubClient &_client, float _humidity, String location)
@@ -636,7 +682,7 @@ void publishHumidity(PubSubClient &_client, float _humidity, String location)
   char buffer[256];
   serializeJson(doc, buffer);
 
-  _client.publish("ship/humidity", buffer);
+  _client.publish("ship/humidity", buffer); // todo: externalize
 }
 
 // Oct7, '23
