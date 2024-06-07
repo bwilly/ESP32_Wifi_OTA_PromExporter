@@ -69,7 +69,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
 
-#define version "may26-2024:zabbix-agent:4"
+#define version "esp32:may26-2024:zabbix-agent:2(bssid and mem)"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -151,6 +151,19 @@ const int ledPin = 2;
 
 String ledState;
 
+/* Append a semi-unique id to the name template */
+char *MakeMine(const char *NameTemplate)
+{
+  // uint16_t uChipId = GetDeviceId();
+  // String Result = String(NameTemplate) + String(uChipId, HEX);
+  String Result = String(NameTemplate) + String(locationName);
+
+  char *tab2 = new char[Result.length() + 1];
+  strcpy(tab2, Result.c_str());
+
+  return tab2;
+}
+
 // Function to handle Zabbix agent.ping
 void handleZabbixPing(AsyncWebServerRequest *request)
 {
@@ -160,25 +173,49 @@ void handleZabbixPing(AsyncWebServerRequest *request)
 // Function to handle Zabbix agent.version
 void handleZabbixVersion(AsyncWebServerRequest *request)
 {
-  request->send(200, "text/plain", "ESP32 Zabbix Agent v1.0");
+  request->send(200, "text/plain", version);
 }
 
 // Function to handle system.uptime
 void handleSystemUptime(AsyncWebServerRequest *request)
 {
-  static unsigned long startTime = millis();
-  // unsigned long uptime = (millis() - startTime) / 1000; // uptime in seconds
-  unsigned long uptime = 99999; // uptime in seconds todo: get real uptime via esp32 api
-  request->send(200, "text/plain", String(uptime));
+  unsigned long uptimeMillis = millis();
+  unsigned long uptimeSeconds = uptimeMillis / 1000;
+  request->send(200, "text/plain", String(uptimeSeconds));
 }
+
+// // Function to handle vm.memory.size[available]
+// void handleAvailableMemory(AsyncWebServerRequest *request)
+// {
+//   // Placeholder value for available memory
+//   // Implement actual memory reading logic if possible
+//   int availableMemory = 1024; // example value in bytes
+//   request->send(200, "text/plain", String(availableMemory));
+// }
 
 // Function to handle vm.memory.size[available]
 void handleAvailableMemory(AsyncWebServerRequest *request)
 {
-  // Placeholder value for available memory
-  // Implement actual memory reading logic if possible
-  int availableMemory = 1024; // example value in bytes
+  // Get available memory
+  int availableMemory = ESP.getFreeHeap(); // Get free heap memory in bytes
   request->send(200, "text/plain", String(availableMemory));
+}
+
+// Function to handle agent.hostname
+void handleHostName(AsyncWebServerRequest *request)
+{
+  request->send(200, "text/plain", MakeMine(MDNS_DEVICE_NAME));
+}
+
+// Function to handle zabbix.agent.availability
+void handleAvailability(AsyncWebServerRequest *request)
+{
+  request->send(200, "text/plain", "1");
+}
+
+void handleWiFiBSSID(AsyncWebServerRequest *request)
+{
+  request->send(200, "text/plain", WiFi.BSSIDstr());
 }
 
 // Function to initialize the Zabbix agent server
@@ -188,6 +225,9 @@ void initZabbixServer()
   zabbixServer.on("/agent.version", HTTP_GET, handleZabbixVersion);
   zabbixServer.on("/system.uptime", HTTP_GET, handleSystemUptime);
   zabbixServer.on("/vm.memory.size[available]", HTTP_GET, handleAvailableMemory);
+  zabbixServer.on("/hostname", HTTP_GET, handleHostName);
+  zabbixServer.on("/bssid", HTTP_GET, handleWiFiBSSID);
+  zabbixServer.on("/availability", HTTP_GET, handleAvailability);
   zabbixServer.begin();
   Serial.println("Zabbix agent server started on port 10050");
 }
@@ -264,19 +304,6 @@ bool initWiFi()
     }
   }
   return true;
-}
-
-/* Append a semi-unique id to the name template */
-char *MakeMine(const char *NameTemplate)
-{
-  // uint16_t uChipId = GetDeviceId();
-  // String Result = String(NameTemplate) + String(uChipId, HEX);
-  String Result = String(NameTemplate) + String(locationName);
-
-  char *tab2 = new char[Result.length() + 1];
-  strcpy(tab2, Result.c_str());
-
-  return tab2;
 }
 
 void AdvertiseServices()
