@@ -69,7 +69,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
 
-#define version "esp32:may26-2024:zabbix-agent:2(bssid and mem)"
+#define version "esp32:june6-2024:wifi-logging"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -263,46 +263,61 @@ void initSPIFFS()
 // Initialize WiFi
 bool initWiFi()
 {
-  // if (ssid == "" || ip == "")
   if (ssid == "")
   {
-    // Serial.println("Undefined SSID or IP address.");
     Serial.println("Undefined SSID.");
     return false;
   }
 
   Serial.println("Setting WiFi to WIFI_STA...");
-  // Copied from Dec'22 working at saltmeadow to connect to strongest signal of mesh network
   WiFi.mode(WIFI_STA);
-  // Add list of wifi networks
+
+  // Add list of Wi-Fi networks
   WiFiMulti wifiMulti;
   wifiMulti.addAP(ssid.c_str(), pass.c_str());
-  Serial.println("WiFi scanNetworks...");
-  WiFi.scanNetworks();
-  // Connect to Wi-Fi using wifiMulti (connects to the SSID with strongest connection)
-  Serial.println("Connecting Wifi; looking for strongest mesh node...");
-  if (wifiMulti.run() == WL_CONNECTED)
+
+  Serial.println("Starting WiFi scan...");
+  int numNetworks = WiFi.scanNetworks();
+  if (numNetworks == -1)
   {
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-    Serial.println("Connected to BSSID: ");
-    Serial.println(WiFi.BSSIDstr());
+    Serial.println("WiFi scan failed.");
+    return false;
   }
 
-  unsigned long currentMillis = millis();
-  previousMillis = currentMillis;
+  Serial.printf("Found %d networks.\n", numNetworks);
+  Serial.printf("%-4s %-32s %-10s %-12s %-20s\n", "No", "SSID", "Signal", "Encryption", "BSSID");
+  for (int i = 0; i < numNetworks; ++i)
+  {
+    Serial.printf("%-4d %-32s %-10d %-12s %-20s\n",
+                  i + 1,
+                  WiFi.SSID(i).c_str(),
+                  WiFi.RSSI(i),
+                  (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "Open" : "Encrypted",
+                  WiFi.BSSIDstr(i).c_str()); // Print BSSID for each network
+  }
 
-  while (WiFi.status() != WL_CONNECTED)
+  // Connect to Wi-Fi using wifiMulti (connects to the SSID with the strongest connection)
+  Serial.println("Connecting Wifi; looking for strongest mesh node...");
+  unsigned long startAttemptTime = millis();
+  unsigned long currentMillis;
+
+  while (wifiMulti.run() != WL_CONNECTED)
   {
     currentMillis = millis();
-    if (currentMillis - previousMillis >= interval)
+    if (currentMillis - startAttemptTime >= interval)
     {
-      Serial.println("Failed to connect.");
+      Serial.println("Failed to connect after interval timeout.");
       return false;
     }
+    Serial.print(".");
+    delay(500); // Reduce this to show progress more frequently
   }
+
+  Serial.println("\nWiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("Connected to BSSID: ");
+  Serial.println(WiFi.BSSIDstr());
   return true;
 }
 
