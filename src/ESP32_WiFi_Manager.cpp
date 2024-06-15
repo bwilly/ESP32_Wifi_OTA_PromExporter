@@ -69,7 +69,10 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
 
-#define version "esp32:june6-2024:wifi-logging"
+#define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
+unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
+
+#define version "esp32:june15-2024:wifi-rssi"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -77,6 +80,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
+
+WiFiMulti wifiMulti;
 
 const float THRESHOLD_TEMPERATURE_PERCENTAGE = 3.0;
 const float THRESHOLD_HUMIDITY_PERCENTAGE = 4.0;
@@ -141,7 +146,7 @@ AsyncWebServer zabbixServer(10050);
 // Timer variables
 // todo: can combine interval and delay. each is from copy/paste. one solves initial connect, the other is for lost connection retry
 unsigned long previousMillis = 0;
-const long interval = 10000; // interval to wait for Wi-Fi connection (milliseconds)
+const long interval = 20000; // interval to wait for Wi-Fi connection (milliseconds)
 unsigned long previous_time = 0;
 unsigned long reconnect_delay = 180000; // 3-min delay
 
@@ -218,6 +223,13 @@ void handleWiFiBSSID(AsyncWebServerRequest *request)
   request->send(200, "text/plain", WiFi.BSSIDstr());
 }
 
+void handleWiFiSignalStrength(AsyncWebServerRequest *request)
+{
+  String rssiString = String(WiFi.RSSI());
+  const char *rssiCharArray = rssiString.c_str();
+  request->send(200, "text/plain", rssiCharArray);
+}
+
 // Function to initialize the Zabbix agent server
 void initZabbixServer()
 {
@@ -227,6 +239,7 @@ void initZabbixServer()
   zabbixServer.on("/vm.memory.size[available]", HTTP_GET, handleAvailableMemory);
   zabbixServer.on("/hostname", HTTP_GET, handleHostName);
   zabbixServer.on("/bssid", HTTP_GET, handleWiFiBSSID);
+  zabbixServer.on("/signal", HTTP_GET, handleWiFiSignalStrength);
   zabbixServer.on("/availability", HTTP_GET, handleAvailability);
   zabbixServer.begin();
   Serial.println("Zabbix agent server started on port 10050");
@@ -260,7 +273,6 @@ void initSPIFFS()
   loadPersistedValues();
 }
 
-// Initialize WiFi
 bool initWiFi()
 {
   if (ssid == "")
@@ -272,52 +284,48 @@ bool initWiFi()
   Serial.println("Setting WiFi to WIFI_STA...");
   WiFi.mode(WIFI_STA);
 
-  // Add list of Wi-Fi networks
-  WiFiMulti wifiMulti;
+  // Add Wi-Fi networks to WiFiMulti
   wifiMulti.addAP(ssid.c_str(), pass.c_str());
 
-  Serial.println("Starting WiFi scan...");
-  int numNetworks = WiFi.scanNetworks();
-  if (numNetworks == -1)
-  {
-    Serial.println("WiFi scan failed.");
-    return false;
-  }
+  Serial.println("Connecting to Wi-Fi; looking for the strongest mesh node...");
 
-  Serial.printf("Found %d networks.\n", numNetworks);
-  Serial.printf("%-4s %-32s %-10s %-12s %-20s\n", "No", "SSID", "Signal", "Encryption", "BSSID");
-  for (int i = 0; i < numNetworks; ++i)
-  {
-    Serial.printf("%-4d %-32s %-10d %-12s %-20s\n",
-                  i + 1,
-                  WiFi.SSID(i).c_str(),
-                  WiFi.RSSI(i),
-                  (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "Open" : "Encrypted",
-                  WiFi.BSSIDstr(i).c_str()); // Print BSSID for each network
-  }
-
-  // Connect to Wi-Fi using wifiMulti (connects to the SSID with the strongest connection)
-  Serial.println("Connecting Wifi; looking for strongest mesh node...");
+  // Start the connection attempt
   unsigned long startAttemptTime = millis();
-  unsigned long currentMillis;
-
   while (wifiMulti.run() != WL_CONNECTED)
   {
-    currentMillis = millis();
+    unsigned long currentMillis = millis();
     if (currentMillis - startAttemptTime >= interval)
     {
       Serial.println("Failed to connect after interval timeout.");
+
+      // Additional diagnostics
+      Serial.print("Last SSID attempted: ");
+      Serial.println(WiFi.SSID());
+      Serial.print("Last BSSID attempted: ");
+      Serial.println(WiFi.BSSIDstr());
+      Serial.print("Signal strength (RSSI): ");
+      Serial.println(WiFi.RSSI());
+      Serial.print("Connection status: ");
+      Serial.println(WiFi.status());
+      // Note: WiFi.reasonCode() can provide additional reason if available
+      if (WiFi.status() != WL_CONNECTED)
+      {
+        Serial.println("WiFi did not connect.");
+      }
+
       return false;
     }
     Serial.print(".");
-    delay(500); // Reduce this to show progress more frequently
+    delay(250); // Shorter delay to show progress
   }
 
+  // Successful connection
   Serial.println("\nWiFi connected");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   Serial.print("Connected to BSSID: ");
   Serial.println(WiFi.BSSIDstr());
+
   return true;
 }
 
@@ -640,6 +648,9 @@ void setup()
   else
   // SETUP
   { // This path is meant to run only upon initial setup
+
+    apStartTime = millis(); // Record the start time in AP mode
+
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
@@ -657,7 +668,7 @@ void setup()
     Serial.print("Setting web root path to /wifimanager.html... ");
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
+              { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
 
@@ -796,7 +807,7 @@ void publishHumidity(PubSubClient &_client, float _humidity, String location)
 
 void reconnectMQ()
 {
-  while (!mqClient.connected())
+  while (!mqClient.connected() && (WiFi.getMode() == WIFI_AP))
   {
     Serial.print("Attempting MQTT connection...");
     if (mqClient.connect(MakeMine(MDNS_DEVICE_NAME)))
@@ -852,6 +863,18 @@ float calculatePercentageChange(float oldValue, float newValue)
 
 void loop()
 {
+  unsigned long currentMillis = millis();
+
+  // Check if we are in AP mode and if so, if it's time to reboot
+  if (WiFi.getMode() == WIFI_AP) // && WiFi.softAPIP().toString() == "192.168.4.1")
+  {
+    if (currentMillis - apStartTime >= AP_REBOOT_TIMEOUT)
+    {
+      Serial.println("Rebooting due to extended time in AP mode...");
+      ESP.restart();
+    }
+  }
+
   // does this need to be here? I didn't use it, here, on the new master project. maybe it was only needed for the non-async web server? bwilly Feb26'23
   // server.handleClient();
 
@@ -860,7 +883,14 @@ void loop()
   // checking for WIFI connection
   if ((WiFi.status() != WL_CONNECTED) && (current_time - previous_time >= reconnect_delay))
   {
-    Serial.print(millis());
+    Serial.print("millis: ");
+    Serial.println(millis());
+    Serial.print("previous_time: ");
+    Serial.println(previous_time);
+    Serial.print("current_time: ");
+    Serial.println(current_time);
+    Serial.print("reconnect_delay: ");
+    Serial.println(reconnect_delay);
     Serial.println("Reconnecting to WIFI network by restarting to leverage best AP algorithm");
     // WiFi.disconnect();
     // WiFi.reconnect();
@@ -887,7 +917,7 @@ void loop()
       float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
 
       // Checking current time
-      unsigned long currentMillis = millis();
+      // unsigned long currentMillis = millis();
 
       unsigned long timeSinceLastPublishTempt = currentMillis - lastPublishTime_tempt;
       unsigned long timeSinceLastPublishHumidity = currentMillis - lastPublishTime_humidity;
