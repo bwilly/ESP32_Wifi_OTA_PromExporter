@@ -64,7 +64,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "TemperatureSensor.h"
 #include "Config.h"
 // no good reason for these to be directives
-#define MDNS_DEVICE_NAME "esp32-climate-sensor-"
+#define MDNS_DEVICE_NAME "sesp-"
 #define SERVICE_NAME "climate-http"
 #define SERVICE_PROTOCOL "tcp"
 #define SERVICE_PORT 80
@@ -73,7 +73,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:june16-2024:cxn-logging"
+#define version "esp32:june20-2024:shortname"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -741,6 +741,9 @@ void publishTemperature(PubSubClient &_client, float _temperature, String locati
   char buffer[512];
   serializeJson(doc, buffer);
 
+  Serial.print("Publishing the following to msg broker: ");
+  Serial.println(buffer);
+
   _client.publish("ship/temperature", buffer); // todo: externalize
 }
 
@@ -758,6 +761,9 @@ void publishHumidity(PubSubClient &_client, float _humidity, String location)
 
   char buffer[256];
   serializeJson(doc, buffer);
+
+  Serial.print("Publishing the following to msg broker: ");
+  Serial.println(buffer);
 
   _client.publish("ship/humidity", buffer); // todo: externalize
 }
@@ -946,8 +952,8 @@ void loop()
       unsigned long timeSinceLastPublishTempt = currentMillis - lastPublishTime_tempt;
       unsigned long timeSinceLastPublishHumidity = currentMillis - lastPublishTime_humidity;
 
-      bool shouldPublishTempt = false;
-      bool shouldPublishHumidity = false;
+      bool shouldPublishTempt = true;    // false;
+      bool shouldPublishHumidity = true; // false;
 
       // Check temperature change criteria
       if (tempChange >= THRESHOLD_TEMPERATURE_PERCENTAGE)
