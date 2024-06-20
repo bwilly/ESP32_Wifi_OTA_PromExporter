@@ -38,6 +38,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include <AsyncTCP.h>
 #include "SPIFFS.h"
 
+#include "esp_log.h"
 #include <WiFiMulti.h>
 #include "ESPmDNS.h"
 
@@ -72,7 +73,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:june15-2024:wifi-rssi"
+#define version "esp32:june16-2024:cxn-logging"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -146,7 +147,7 @@ AsyncWebServer zabbixServer(10050);
 // Timer variables
 // todo: can combine interval and delay. each is from copy/paste. one solves initial connect, the other is for lost connection retry
 unsigned long previousMillis = 0;
-const long interval = 20000; // interval to wait for Wi-Fi connection (milliseconds)
+const long interval = 40000; // interval to wait for Wi-Fi connection (milliseconds)
 unsigned long previous_time = 0;
 unsigned long reconnect_delay = 180000; // 3-min delay
 
@@ -284,6 +285,22 @@ bool initWiFi()
   Serial.println("Setting WiFi to WIFI_STA...");
   WiFi.mode(WIFI_STA);
 
+  Serial.print("Setting DNS hostname to: ");
+  Serial.println(MakeMine(MDNS_DEVICE_NAME));
+  WiFi.setHostname(MakeMine(MDNS_DEVICE_NAME));
+
+  // WiFi.begin(ssid.c_str(), pass.c_str());
+
+  int n = WiFi.scanNetworks();
+  Serial.println("Scan complete");
+  for (int i = 0; i < n; ++i)
+  {
+    Serial.print("SSID: ");
+    Serial.print(WiFi.SSID(i));
+    Serial.print(", RSSI: ");
+    Serial.println(WiFi.RSSI(i));
+  }
+
   // Add Wi-Fi networks to WiFiMulti
   wifiMulti.addAP(ssid.c_str(), pass.c_str());
 
@@ -293,20 +310,21 @@ bool initWiFi()
   unsigned long startAttemptTime = millis();
   while (wifiMulti.run() != WL_CONNECTED)
   {
+    // Additional diagnostics
+    Serial.print("Last SSID attempted: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("Last BSSID attempted: ");
+    Serial.println(WiFi.BSSIDstr());
+    Serial.print("Signal strength (RSSI): ");
+    Serial.println(WiFi.RSSI());
+    Serial.print("Connection status: ");
+    Serial.println(WiFi.status());
+
     unsigned long currentMillis = millis();
     if (currentMillis - startAttemptTime >= interval)
     {
       Serial.println("Failed to connect after interval timeout.");
 
-      // Additional diagnostics
-      Serial.print("Last SSID attempted: ");
-      Serial.println(WiFi.SSID());
-      Serial.print("Last BSSID attempted: ");
-      Serial.println(WiFi.BSSIDstr());
-      Serial.print("Signal strength (RSSI): ");
-      Serial.println(WiFi.RSSI());
-      Serial.print("Connection status: ");
-      Serial.println(WiFi.status());
       // Note: WiFi.reasonCode() can provide additional reason if available
       if (WiFi.status() != WL_CONNECTED)
       {
@@ -316,7 +334,10 @@ bool initWiFi()
       return false;
     }
     Serial.print(".");
-    delay(250); // Shorter delay to show progress
+    WiFi.disconnect(true);
+    delay(500); // Shorter delay to show progress
+
+    WiFi.reconnect();
   }
 
   // Successful connection
@@ -460,6 +481,9 @@ void setup()
 {
   // Serial port for debugging purposes
   Serial.begin(115200);
+
+  // Enable verbose logging for the WiFi component
+  esp_log_level_set("wifi", ESP_LOG_VERBOSE);
 
   Serial.println("initSpiffs...");
   initSPIFFS();
