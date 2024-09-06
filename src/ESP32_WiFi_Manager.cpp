@@ -73,7 +73,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:june20-2024:shortname"
+#define version "esp32:Sept-2024:hostname"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -284,6 +284,7 @@ bool initWiFi()
 
   Serial.println("Setting WiFi to WIFI_STA...");
   WiFi.mode(WIFI_STA);
+  WiFi.setHostname(MakeMine(MDNS_DEVICE_NAME));
 
   Serial.print("Setting DNS hostname to: ");
   Serial.println(MakeMine(MDNS_DEVICE_NAME));
