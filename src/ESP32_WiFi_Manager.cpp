@@ -81,8 +81,11 @@ unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
 WiFiClient espClient;
 PubSubClient mqClient(espClient);
-
 WiFiMulti wifiMulti;
+
+// DNS settings
+IPAddress primaryDNS(10, 27, 1, 30); // Your Raspberry Pi's IP (DNS server)
+IPAddress secondaryDNS(8, 8, 8, 8);  // Optional: Google DNS
 
 const float THRESHOLD_TEMPERATURE_PERCENTAGE = 3.0;
 const float THRESHOLD_HUMIDITY_PERCENTAGE = 4.0;
@@ -283,12 +286,22 @@ bool initWiFi()
   }
 
   Serial.println("Setting WiFi to WIFI_STA...");
-  WiFi.mode(WIFI_STA);
-  WiFi.setHostname(MakeMine(MDNS_DEVICE_NAME));
 
-  Serial.print("Setting DNS hostname to: ");
-  Serial.println(MakeMine(MDNS_DEVICE_NAME));
-  WiFi.setHostname(MakeMine(MDNS_DEVICE_NAME));
+  WiFi.disconnect(true);
+  // delay(180);
+  // Set custom hostname
+  if (!WiFi.setHostname(MakeMine(MDNS_DEVICE_NAME)))
+  {
+    Serial.println("Error setting hostname");
+  }
+  else
+  {
+    Serial.print("Setting DNS hostname to: ");
+    Serial.println(MakeMine(MDNS_DEVICE_NAME));
+  }
+  WiFi.mode(WIFI_STA);
+
+  WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
 
   // WiFi.begin(ssid.c_str(), pass.c_str());
 
@@ -327,18 +340,18 @@ bool initWiFi()
       Serial.println("Failed to connect after interval timeout.");
 
       // Note: WiFi.reasonCode() can provide additional reason if available
-      if (WiFi.status() != WL_CONNECTED)
-      {
-        Serial.println("WiFi did not connect.");
-      }
+      // if (WiFi.status() != WL_CONNECTED)
+      // {
+      //   Serial.println("WiFi did not connect.");
+      // }
 
       return false;
     }
     Serial.print(".");
-    WiFi.disconnect(true);
+    // WiFi.disconnect(true);
     delay(500); // Shorter delay to show progress
 
-    WiFi.reconnect();
+    // WiFi.reconnect();
   }
 
   // Successful connection
