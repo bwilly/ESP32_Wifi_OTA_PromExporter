@@ -851,7 +851,8 @@ void publishHumidity(PubSubClient &_client, float _humidity, String location)
 
 void reconnectMQ()
 {
-  while (!mqClient.connected() && (WiFi.getMode() == WIFI_AP))
+  // while (!mqClient.connected() && (WiFi.getMode() == WIFI_AP))
+  while (!mqClient.connected())
   {
     Serial.print("Attempting MQTT connection...");
     if (mqClient.connect(MakeMine(MDNS_DEVICE_NAME)))
@@ -941,8 +942,8 @@ void loop()
     ESP.restart();
     previous_time = current_time;
   }
-
-  // publishSimpleMessage(); // manual test
+  reconnectMQ();
+  publishSimpleMessage(); // manual test
   if (mqttEnabled)
   {
     if (!mqClient.connected())
