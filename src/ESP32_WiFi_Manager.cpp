@@ -74,7 +74,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:Sept-2024:hostname-mqtt"
+#define version "esp32:Sept-2024:full-clean"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
