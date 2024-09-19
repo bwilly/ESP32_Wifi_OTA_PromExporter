@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <DHT_SRL.h>
 #include <DHT_U.h>
+#include <DHT.h>
 #include "shared_vars.h"
 
 #define DHTTYPE DHT22 // DHT 22 (AM2302)

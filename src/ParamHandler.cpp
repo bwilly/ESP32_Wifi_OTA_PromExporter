@@ -44,7 +44,7 @@ void handlePostParameters(AsyncWebServerRequest *request)
         {
             if (paramFound)
             {
-                AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
+                const AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
                 value = p->value();
                 if (!value.isEmpty())
                 {

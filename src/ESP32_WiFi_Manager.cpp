@@ -43,10 +43,11 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "ESPmDNS.h"
 
 // #include <DHT_U.h>
+#include <DHT.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#include <AsyncElegantOTA.h>
+#include <ElegantOTA.h>
 
 #include <string>
 
@@ -73,7 +74,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:Sept-2024:hostname"
+#define version "esp32:Sept-2024:hostname-mqtt"
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -651,7 +652,7 @@ void setup()
       ESP.restart(); });
 
     // uses path like server.on("/update")
-    AsyncElegantOTA.begin(&server);
+    ElegantOTA.begin(&server);
 
     configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity
     time_t now;
@@ -942,10 +943,13 @@ void loop()
     ESP.restart();
     previous_time = current_time;
   }
-  reconnectMQ();
-  publishSimpleMessage(); // manual test
+
   if (mqttEnabled)
   {
+
+    reconnectMQ();
+    publishSimpleMessage(); // manual test
+
     if (!mqClient.connected())
     {
       reconnectMQ();
