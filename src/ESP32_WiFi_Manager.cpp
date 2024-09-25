@@ -43,7 +43,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "ESPmDNS.h"
 
 // #include <DHT_U.h>
-#include <DHT.h>
+// #include <dht.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
@@ -74,7 +74,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:Sept-2024:single-core" // trying to identify cause of unreliable dht22 readings
+#define version "esp32:Sept-2024:single-task" // trying to identify cause of unreliable dht22 readings
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -551,6 +551,8 @@ void setup()
   Serial.println(locationName);
   // Serial.println(ip);
   // Serial.println(gateway);
+
+  initSensorTask(); // dht
 
   if (initWiFi())
   { // Station Mode
