@@ -58,7 +58,7 @@ void sensorTask(void *parameter)
     for (;;)
     {
         // Wait a few seconds between measurements
-        vTaskDelay(pdMS_TO_TICKS(2000)); // 2 seconds
+        vTaskDelay(pdMS_TO_TICKS(5000)); // 2 seconds
 
         // Reading temperature and humidity
         float temp = dht.readTemperature();
