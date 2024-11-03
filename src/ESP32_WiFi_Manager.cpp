@@ -47,6 +47,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+// #include <AsyncElegantOTA.h>
 #include <ElegantOTA.h>
 
 #include <string>
@@ -74,7 +75,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:Sept-2024:single-task" // trying to identify cause of unreliable dht22 readings
+#define version "esp32:single-task-longer-wait:Nov-2024" // trying to identify cause of unreliable dht22 readings
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -654,20 +655,21 @@ void setup()
       ESP.restart(); });
 
     // Correct the onEnd function signature
-    ElegantOTA.onEnd([](bool success)
-                     {
-    if (success) {
-        Serial.println("OTA End - restarting device.");
-        ESP.restart();  // Restart the ESP32 after OTA is completed.
-    } else {
-        Serial.println("OTA failed.");
-    } });
+    // AsyncElegantOTA.onEnd([](bool success)
+    //                       {
+    // if (success) {
+    //     Serial.println("OTA End - restarting device.");
+    //     ESP.restart();  // Restart the ESP32 after OTA is completed.
+    // } else {
+    //     Serial.println("OTA failed.");
+    // } });
 
     // Correct the onProgress function signature (optional, depending on version)
-    ElegantOTA.onProgress([](unsigned int progress, unsigned int total)
-                          { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+    // AsyncElegantOTA.onProgress([](unsigned int progress, unsigned int total)
+    //                            { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
 
     // uses path like server.on("/update")
+    // AsyncElegantOTA.begin(&server);
     ElegantOTA.begin(&server);
 
     configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity

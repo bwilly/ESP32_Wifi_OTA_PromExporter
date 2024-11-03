@@ -80,7 +80,7 @@ String processor(const String &var)
     // Handle special cases if any
     // ...
 
-    else if (var == "enableW1_checked")
+    // else if (var == "enableW1_checked")
         //     {
         //         String fileValue = readFile(SPIFFS, enableW1Path.c_str());
         //         if (fileValue == "true")
