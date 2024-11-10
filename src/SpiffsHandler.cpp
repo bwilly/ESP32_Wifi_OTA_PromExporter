@@ -2,6 +2,8 @@
 #include "shared_vars.h"
 #include "SPIFFS.h"
 #include "ParamMetadata.h"
+#include <ArduinoJson.h>
+#include <sstream>
 
 String makePath(const char *param)
 {
@@ -73,7 +75,35 @@ void loadPersistedValues()
 //     mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
 // }
 
-void parseHexToArray(const String &value, uint8_t array[8])
+// void parseHexToArray(const String &value, uint8_t array[8])
+// {
+//     int startIndex = value.indexOf('{');
+//     int endIndex = value.indexOf('}');
+
+//     if (startIndex != -1 && endIndex != -1)
+//     {
+//         String subValue = value.substring(startIndex + 1, endIndex);
+
+//         int byteCount = 0;
+//         int commaIndex;
+//         while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
+//         {
+//             // String byteStr = subValue.substring(0, commaIndex).trim();
+//             String byteStr = subValue.substring(0, commaIndex);
+//             byteStr.trim();
+//             array[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+
+//             subValue = subValue.substring(commaIndex + 1);
+//             byteCount++;
+//         }
+//         if (byteCount < W1_NUM_BYTES)
+//         { // Process the last byte
+//             array[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+//         }
+//     }
+// }
+
+void parseHexToArray(const String &value, std::array<uint8_t, 8> intoArray)
 {
     int startIndex = value.indexOf('{');
     int endIndex = value.indexOf('}');
@@ -89,14 +119,14 @@ void parseHexToArray(const String &value, uint8_t array[8])
             // String byteStr = subValue.substring(0, commaIndex).trim();
             String byteStr = subValue.substring(0, commaIndex);
             byteStr.trim();
-            array[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+            intoArray[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
 
             subValue = subValue.substring(commaIndex + 1);
             byteCount++;
         }
         if (byteCount < W1_NUM_BYTES)
         { // Process the last byte
-            array[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+            intoArray[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
         }
     }
 }
@@ -122,14 +152,14 @@ String readFile(fs::FS &fs, const char *path)
     return fileContent;
 }
 
-void loadW1AddressFromFile(fs::FS &fs, const char *path, uint8_t entryIndex)
-{
-    String content = readFile(fs, path);
-    if (content.length() > 0)
-    {
-        parseHexToArray(content, w1Address[entryIndex]); // todo:refactor so w1Address is passed as an arg rather than be global
-    }
-}
+// void loadW1AddressFromFile(fs::FS &fs, const char *path, uint8_t entryIndex)
+// {
+//     String content = readFile(fs, path);
+//     if (content.length() > 0)
+//     {
+//         parseHexToArray(content, w1Address[entryIndex]); // todo:refactor so w1Address is passed as an arg rather than be global
+//     }
+// }
 
 // Write file to SPIFFS
 void writeFile(fs::FS &fs, const char *path, const char *message)
@@ -152,42 +182,109 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
     }
 }
 
-void parseAndStoreHex(const String &value, uint8_t index)
+// void parseAndStoreHex(const String &value, uint8_t index)
+// {
+//     int startIndex = value.indexOf('{');
+//     int endIndex = value.indexOf('}');
+
+//     if (startIndex != -1 && endIndex != -1)
+//     {
+//         String subValue = value.substring(startIndex + 1, endIndex);
+
+//         int byteCount = 0;
+//         int commaIndex;
+//         while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
+//         {
+//             // String byteStr = subValue.substring(0, commaIndex).trim();
+//             String byteStr = subValue.substring(0, commaIndex);
+//             byteStr.trim();
+
+//             w1Address[index][byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+
+//             subValue = subValue.substring(commaIndex + 1);
+//             byteCount++;
+//         }
+//         if (byteCount < W1_NUM_BYTES)
+//         { // Process the last byte
+//             w1Address[index][byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+//         }
+//     }
+
+//     // Debug output
+//     for (int i = 0; i < W1_NUM_BYTES; i++)
+//     {
+//         Serial.print("w1Address[");
+//         Serial.print(index);
+//         Serial.print("][");
+//         Serial.print(i);
+//         Serial.print("] = ");
+//         Serial.println(w1Address[index][i], HEX);
+//     }
+// }
+
+uint8_t hexStringToByte(const char *hexString)
 {
-    int startIndex = value.indexOf('{');
-    int endIndex = value.indexOf('}');
+    unsigned int byte;
+    std::stringstream ss;
+    ss << std::hex << (hexString + 2); // Skip "0x" prefix
+    ss >> byte;
+    return static_cast<uint8_t>(byte);
+}
 
-    if (startIndex != -1 && endIndex != -1)
+// untested and unconnected, but i need to write the persist first
+void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Sensor, 3> &sensorArray)
+{
+    File file = fs.open(path, "r");
+    if (!file)
     {
-        String subValue = value.substring(startIndex + 1, endIndex);
-
-        int byteCount = 0;
-        int commaIndex;
-        while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
-        {
-            // String byteStr = subValue.substring(0, commaIndex).trim();
-            String byteStr = subValue.substring(0, commaIndex);
-            byteStr.trim();
-
-            w1Address[index][byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
-
-            subValue = subValue.substring(commaIndex + 1);
-            byteCount++;
-        }
-        if (byteCount < W1_NUM_BYTES)
-        { // Process the last byte
-            w1Address[index][byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
-        }
+        Serial.println("Failed to open file for reading");
+        return;
     }
 
-    // Debug output
-    for (int i = 0; i < W1_NUM_BYTES; i++)
+    StaticJsonDocument<512> doc;
+
+    DeserializationError error = deserializeJson(doc, file);
+    if (error)
     {
-        Serial.print("w1Address[");
-        Serial.print(index);
-        Serial.print("][");
-        Serial.print(i);
-        Serial.print("] = ");
-        Serial.println(w1Address[index][i], HEX);
+        Serial.print("Failed to parse JSON: ");
+        Serial.println(error.c_str());
+        file.close();
+        return;
+    }
+
+    file.close();
+
+    JsonArray sensorsArray = doc["sensors"];
+    int i = 0;
+    for (JsonObject sensorObj : sensorsArray)
+    {
+        if (i >= sensorArray.size())
+            break;
+
+        sensorArray[i].name = sensorObj["name"].as<const char *>();
+
+        int j = 0;
+        for (JsonVariant hexVal : sensorObj["addr"].as<JsonArray>())
+        {
+            if (j >= sensorArray[i].HEX_ARRAY.size())
+                break;
+            sensorArray[i].HEX_ARRAY[j] = hexStringToByte(hexVal.as<const char *>());
+            j++;
+        }
+        i++;
+    }
+
+    Serial.println("Loaded sensors from JSON:");
+    for (const auto &sensor : sensorArray)
+    {
+        Serial.print("Name: ");
+        Serial.println(sensor.name.c_str());
+        Serial.print("Address: ");
+        for (const auto &hex : sensor.HEX_ARRAY)
+        {
+            Serial.print(hex);
+            Serial.print(" ");
+        }
+        Serial.println();
     }
 }

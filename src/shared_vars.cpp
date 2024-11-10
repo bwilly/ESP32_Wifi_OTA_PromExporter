@@ -36,7 +36,8 @@ bool dhtEnabled;
 bool mqttEnabled;
 String mainDelay;
 uint8_t w1Address[3][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023
-String w1Name[3];
+String w1Name[3];        // todo:remove after refactor Nov8'24
+// std::array<W1Sensor, 3> w1Sensor;
 
 // uint8_t w1Sensors[];
 
@@ -49,6 +50,7 @@ std::map<String, String *> paramToVariableMap = {
     {"mqtt-port", &mqttPort},
     {"main-delay", &mainDelay},
     // Note: For Boolean and other non-String types, you might need a different approach
+
 };
 
 std::map<String, bool *> paramToBoolMap = {
@@ -56,3 +58,5 @@ std::map<String, bool *> paramToBoolMap = {
     {"enableDHT", &dhtEnabled},
     // {"mqttEnabled", &mqttEnabled}};
     {"enableMQTT", &mqttEnabled}};
+
+SensorGroupW1 w1Sensors;

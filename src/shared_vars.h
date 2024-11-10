@@ -54,8 +54,22 @@ extern bool dhtEnabled;
 extern bool mqttEnabled;
 
 extern String mainDelay;
-extern uint8_t w1Address[3][8];
-extern String w1Name[3];
+extern uint8_t w1Address[3][8]; // todo:remove post refactor
+extern String w1Name[3];        // todo:remove post refactor
+
+struct W1Sensor
+{
+    std::string name;
+    std::array<uint8_t, 8> HEX_ARRAY;
+};
+
+struct SensorGroupW1
+{
+    std::array<W1Sensor, 3> sensors;
+};
+
+extern SensorGroupW1 w1Sensors;
+
 // extern uint8_t w1Sensor[3][8];
 // Building for first use by multiple DS18B20 sensors
 // struct TemperatureReading

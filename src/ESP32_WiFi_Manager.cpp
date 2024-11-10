@@ -526,21 +526,7 @@ void setup()
   {
     if (paramMetadata.name.startsWith("w1-"))
     {
-      // If the parameter name starts with "w1-", it's related to w1Address or w1Name
-      if (paramMetadata.name.endsWith("-name"))
-      {
-        // This is a w1Name parameter
-        int index = (paramMetadata.name == "w1-1-name") ? 0 : (paramMetadata.name == "w1-2-name") ? 1
-                                                                                                  : 2;
-        w1Name[index] = readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
-      }
-      else
-      {
-        // This is a w1Address parameter
-        int index = (paramMetadata.name == "w1-1") ? 0 : (paramMetadata.name == "w1-2") ? 1
-                                                                                        : 2;
-        loadW1AddressFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), index);
-      }
+      loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
     }
     // Add else if blocks here for loading other specific parameter types if needed
   }

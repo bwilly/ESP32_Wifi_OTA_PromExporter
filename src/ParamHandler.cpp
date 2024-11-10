@@ -3,9 +3,11 @@
 #include "SpiffsHandler.h"
 #include "SPIFFS.h"
 #include "shared_vars.h"
+#include <iostream>
 
 // todo: refactor this is copy/paste from SpiffsHandler.cpp
-void parseHexToArray_dup(const String &value, uint8_t array[8])
+// void parseHexToArray_dup(const String &value, uint8_t array[8])
+void parseHexToArray_dup(const String &value, std::array<uint8_t, 8> intoArray)
 {
     int startIndex = value.indexOf('{');
     int endIndex = value.indexOf('}');
@@ -21,18 +23,60 @@ void parseHexToArray_dup(const String &value, uint8_t array[8])
             // String byteStr = subValue.substring(0, commaIndex).trim();
             String byteStr = subValue.substring(0, commaIndex);
             byteStr.trim();
-            array[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+            intoArray[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
 
             subValue = subValue.substring(commaIndex + 1);
             byteCount++;
         }
         if (byteCount < W1_NUM_BYTES)
         { // Process the last byte
-            array[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+            intoArray[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
         }
     }
 }
 
+bool startsWithW1(const std::string &name)
+{
+    // Check if `name` starts with "w1"
+    return name.rfind("w1", 0) == 0;
+}
+
+bool endsWithName(const std::string &name)
+{
+    const std::string suffix = "-name";
+    // Check if `name` ends with "-name"
+    if (name.size() >= suffix.size())
+    {
+        return name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+    return false;
+}
+
+int getSensorArrayIndex(const std::string &name)
+{
+    // Find the start position of the number after "w1-"
+    std::size_t pos = name.find("w1-");
+    if (pos == std::string::npos)
+    {
+        return -1; // Return -1 if the pattern is not found
+    }
+
+    pos += 3; // Move past "w1-"
+
+    // Extract the number portion and convert it to an integer
+    std::size_t endPos = name.find("-", pos);
+    if (endPos == std::string::npos)
+    {
+        return -1; // Return -1 if there's no following dash
+    }
+
+    int sensorPosition = std::stoi(name.substr(pos, endPos - pos));
+
+    // Convert to zero-based index
+    return sensorPosition - 1;
+}
+
+// Loop the list of expected, pre-defined params
 void handlePostParameters(AsyncWebServerRequest *request)
 {
     for (const auto &paramMetadata : paramList)
@@ -44,12 +88,34 @@ void handlePostParameters(AsyncWebServerRequest *request)
         {
             if (paramFound)
             {
+                Serial.print("Saving param: ");
+                Serial.println(paramMetadata.name);
+
                 const AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
                 value = p->value();
-                if (!value.isEmpty())
+
+                if (startsWithW1(paramMetadata.name.c_str())) // W1 Name
                 {
-                    *(paramToVariableMap[paramMetadata.name]) = value;
-                    writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), value.c_str());
+                    int index = getSensorArrayIndex(paramMetadata.name.c_str());
+
+                    if (endsWithName(paramMetadata.name.c_str()))
+                    {
+
+                        w1Sensors.sensors[index].name = value.c_str();
+                    }
+                    else
+                    { // the string of hex vals
+                        parseHexToArray_dup(value, w1Sensors.sensors[index].HEX_ARRAY);
+                    }
+                }
+                else
+                { // any other type of string
+
+                    if (!value.isEmpty())
+                    {
+                        *(paramToVariableMap[paramMetadata.name]) = value; // i don't think this is needed. we are saving to file and then system restarts
+                        writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), value.c_str());
+                    }
                 }
             }
         }
@@ -64,6 +130,12 @@ void handlePostParameters(AsyncWebServerRequest *request)
             *(paramToBoolMap[paramMetadata.name]) = isChecked;
             writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), isChecked ? "true" : "false");
         }
+
+        else
+        {
+            Serial.print("Unexpected parameter: ");
+            Serial.println(paramMetadata.name.c_str());
+        }
         // ... additional handling for other types
         // Now, save these to SPIFFS regardless of whether they were received in the POST or not.
         // writeFile(SPIFFS, enableW1Path.c_str(), enableW1 ? "true" : "false");
@@ -73,6 +145,7 @@ void handlePostParameters(AsyncWebServerRequest *request)
         // Special handling for complex types like w1Address and w1Name
         // ...
     }
+    // todo:now save the w1 sensors as json to its w1 file
 }
 
 // void handlePostParameters(AsyncWebServerRequest *request)
