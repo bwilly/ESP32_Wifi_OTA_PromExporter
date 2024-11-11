@@ -15,9 +15,9 @@ std::vector<ParamMetadata> paramList = {
     {"mqtt-port", makePath(PARAM_MQTT_PORT), ParamMetadata::STRING},
     // {"main-delay", makePath(PARAM_MAIN_DELAY), ParamMetadata::NUMBER},
     {"main-delay", makePath(PARAM_MAIN_DELAY), ParamMetadata::STRING},
-    {"w1-1", makePath(PARAM_W1_1), ParamMetadata::HEX_ARRAY}, // val is an array of hex and spiff is an array of w1-1 thru w1-3
-    {"w1-2", makePath(PARAM_W1_2), ParamMetadata::HEX_ARRAY},
-    {"w1-3", makePath(PARAM_W1_3), ParamMetadata::HEX_ARRAY},
+    {"w1-1", makePath(PARAM_W1_1), ParamMetadata::STRING}, // val is an array of hex and spiff is an array of w1-1 thru w1-3
+    {"w1-2", makePath(PARAM_W1_2), ParamMetadata::STRING},
+    {"w1-3", makePath(PARAM_W1_3), ParamMetadata::STRING},
     {"w1-1-name", makePath(PARAM_W1_1_NAME), ParamMetadata::STRING}, // val is a string and the array is the spiff set of w1-1-name thru w1-3-name
     {"w1-2-name", makePath(PARAM_W1_2_NAME), ParamMetadata::STRING},
     {"w1-3-name", makePath(PARAM_W1_3_NAME), ParamMetadata::STRING},

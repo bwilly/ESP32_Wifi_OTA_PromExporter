@@ -182,6 +182,41 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
     }
 }
 
+void saveW1SensorConfigToFile(fs::FS &fs, const char *path)
+{
+    // Create a JSON document
+    StaticJsonDocument<512> doc;
+
+    // Create an array in the JSON document
+    JsonArray sensorsArray = doc.createNestedArray("sensors");
+
+    // Iterate over each sensor in w1Sensors and add it to the JSON array
+    for (const auto &sensor : w1Sensors.sensors) // todo: abstract out w1Sensors Nov10'24
+    {
+        JsonObject sensorObj = sensorsArray.createNestedObject();
+        sensorObj["name"] = sensor.name.c_str();
+
+        // Create an array for the address
+        JsonArray addrArray = sensorObj.createNestedArray("addr");
+        for (const auto &hex : sensor.HEX_ARRAY)
+        {
+            char hexStr[5];                                  // Buffer to hold "0xXX"
+            snprintf(hexStr, sizeof(hexStr), "0x%02X", hex); // Format each byte as hex
+            addrArray.add(hexStr);
+        }
+    }
+
+    // Serialize JSON to a string
+    char jsonOutput[512];
+    serializeJson(doc, jsonOutput, sizeof(jsonOutput));
+
+    // Use writeFile to save the JSON string to the specified path
+    writeFile(fs, path, jsonOutput);
+
+    Serial.println("Saved sensors to JSON file:");
+    Serial.println(jsonOutput); // Optional: print the JSON output for verification
+}
+
 // void parseAndStoreHex(const String &value, uint8_t index)
 // {
 //     int startIndex = value.indexOf('{');
@@ -231,7 +266,6 @@ uint8_t hexStringToByte(const char *hexString)
     return static_cast<uint8_t>(byte);
 }
 
-// untested and unconnected, but i need to write the persist first
 void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Sensor, 3> &sensorArray)
 {
     File file = fs.open(path, "r");
@@ -241,7 +275,7 @@ void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Senso
         return;
     }
 
-    StaticJsonDocument<512> doc;
+    DynamicJsonDocument doc(2048);
 
     DeserializationError error = deserializeJson(doc, file);
     if (error)
@@ -262,6 +296,8 @@ void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Senso
             break;
 
         sensorArray[i].name = sensorObj["name"].as<const char *>();
+
+        Serial.println("Hydrated name with: " + String(sensorArray[i].name.c_str()));
 
         int j = 0;
         for (JsonVariant hexVal : sensorObj["addr"].as<JsonArray>())

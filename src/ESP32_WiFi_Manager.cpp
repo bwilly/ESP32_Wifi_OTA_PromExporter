@@ -526,7 +526,8 @@ void setup()
   {
     if (paramMetadata.name.startsWith("w1-"))
     {
-      loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
+      // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
+      loadW1SensorConfigFromFile(SPIFFS, "/w1Json", w1Sensors.sensors); // moved away from coupleing file name of storage to teh paramMetaData. maybe i should use it. nov'24
     }
     // Add else if blocks here for loading other specific parameter types if needed
   }

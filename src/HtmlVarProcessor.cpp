@@ -37,12 +37,50 @@ String SendHTML(TemperatureReading *readings, int numReadings)
 
 String processor(const String &var)
 {
-    // Iterate over paramList to find the matching parameter
+    // Check for variables in the form of "w1-<index>" or "w1-<index>-name"
+    if (var.startsWith("w1-"))
+    {
+        int indexStart = 3; // Position after "w1-"
+        int hyphenPos = var.indexOf('-', indexStart);
+
+        // Extract the sensor index (one-based) and convert to zero-based
+        int sensorIndex = var.substring(indexStart, hyphenPos).toInt() - 1;
+        if (sensorIndex < 0 || sensorIndex >= w1Sensors.sensors.size())
+        {
+            return ""; // Invalid index, return empty
+        }
+
+        // Check if var ends with "-name"
+        if (var.endsWith("-name"))
+        {
+            return String(w1Sensors.sensors[sensorIndex].name.c_str()); // Convert std::string to String
+        }
+        else
+        {
+            // Return sensor address as a comma-separated hex string
+            String address;
+            for (int i = 0; i < w1Sensors.sensors[sensorIndex].HEX_ARRAY.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    address += ",";
+                }
+                address += "0x";
+                if (w1Sensors.sensors[sensorIndex].HEX_ARRAY[i] < 0x10)
+                {
+                    address += "0"; // Pad single digit hex values
+                }
+                address += String(w1Sensors.sensors[sensorIndex].HEX_ARRAY[i], HEX);
+            }
+            return address;
+        }
+    }
+
+    // Fallback: existing paramList processing for other variables
     for (const auto &paramMetadata : paramList)
     {
         if (var == paramMetadata.name && paramMetadata.type == ParamMetadata::BOOLEAN)
         {
-
             String fileVal = readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
 
             Serial.print("Reading ");
@@ -65,36 +103,69 @@ String processor(const String &var)
         }
     }
 
-    if (var == "STATE") // this is from the example sample
-    {
-        // if (digitalRead(ledPin))
-        // {
-        //     ledState = "ON";
-        // }
-        // else
-        // {
-        //     ledState = "OFF";
-        // }
-        // return ledState;
-    }
-    // Handle special cases if any
-    // ...
-
-    // else if (var == "enableW1_checked")
-        //     {
-        //         String fileValue = readFile(SPIFFS, enableW1Path.c_str());
-        //         if (fileValue == "true")
-        //         {
-        //             return "checked";
-        //         }
-        //         else if (fileValue == "false" || fileValue == "")
-        //         {
-        //             return "";
-        //         }
-        //     }
-
-        return String(); // Return an empty string if no match is found
+    return ""; // Return empty if var does not match any known parameters
 }
+
+// String processor(const String &var)
+// {
+//     // Iterate over paramList to find the matching parameter
+//     for (const auto &paramMetadata : paramList)
+//     {
+//         if (var == paramMetadata.name && paramMetadata.type == ParamMetadata::BOOLEAN)
+//         {
+
+//             String fileVal = readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
+
+//             Serial.print("Reading ");
+//             Serial.println(paramMetadata.name);
+//             Serial.print("Value: ");
+//             Serial.println(fileVal);
+
+//             if (fileVal == "true")
+//             {
+//                 return "checked";
+//             }
+//             else
+//             {
+//                 return "";
+//             }
+//         }
+//         if (var == paramMetadata.name)
+//         {
+//             return readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
+//         }
+//     }
+
+//     if (var == "STATE") // this is from the example sample
+//     {
+//         // if (digitalRead(ledPin))
+//         // {
+//         //     ledState = "ON";
+//         // }
+//         // else
+//         // {
+//         //     ledState = "OFF";
+//         // }
+//         // return ledState;
+//     }
+//     // Handle special cases if any
+//     // ...
+
+//     // else if (var == "enableW1_checked")
+//         //     {
+//         //         String fileValue = readFile(SPIFFS, enableW1Path.c_str());
+//         //         if (fileValue == "true")
+//         //         {
+//         //             return "checked";
+//         //         }
+//         //         else if (fileValue == "false" || fileValue == "")
+//         //         {
+//         //             return "";
+//         //         }
+//         //     }
+
+//         return String(); // Return an empty string if no match is found
+// }
 
 // Replaces placeholder with LED state value
 // Only used for printing info

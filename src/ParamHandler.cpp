@@ -88,11 +88,12 @@ void handlePostParameters(AsyncWebServerRequest *request)
         {
             if (paramFound)
             {
-                Serial.print("Saving param: ");
-                Serial.println(paramMetadata.name);
+                Serial.print("Saving param: " + paramMetadata.name);
 
                 const AsyncWebParameter *p = request->getParam(paramMetadata.name.c_str(), true);
                 value = p->value();
+
+                Serial.println(" -> " + value);
 
                 if (startsWithW1(paramMetadata.name.c_str())) // W1 Name
                 {
@@ -145,7 +146,8 @@ void handlePostParameters(AsyncWebServerRequest *request)
         // Special handling for complex types like w1Address and w1Name
         // ...
     }
-    // todo:now save the w1 sensors as json to its w1 file
+    // save the w1 sensors as json to its w1 file
+    saveW1SensorConfigToFile(SPIFFS, "/w1Json");
 }
 
 // void handlePostParameters(AsyncWebServerRequest *request)
