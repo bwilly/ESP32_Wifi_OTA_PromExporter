@@ -4,7 +4,7 @@
 // Climate Sensor
 // Prometheus Exporter
 // Copywrite 2022-2023
-// Copyright 2022-2023
+// Copyright 2022-2023, 2024
 
 // Unstable Wifi post network/wifi failure
       - plan for fix here is to switch base wifi platform code away from Rui Santos to
@@ -124,7 +124,7 @@ unsigned long lastPublishTime_humidity = 0;
 // // Pass our oneWire reference to Dallas Temperature.
 // DallasTemperature sensors(&oneWire);
 
-OneWire oneWire(ONE_WIRE_BUS);
+OneWire oneWire(ONE_WIRE_BUS); // todo:externalize I/O port nov'24
 // Create a TemperatureSensor instance
 TemperatureSensor temptSensor(&oneWire); // Dallas
 
@@ -493,6 +493,23 @@ void setupDS18b20(void)
   // Sensor 3 : 0x28, 0xC5, 0xE1, 0x49, 0xF6, 0x50, 0x3C, 0x38
 }
 
+// todo:extract to another file
+// Define function to populate w1Address and w1Name from w1Sensors
+void populateW1Addresses(uint8_t w1Address[3][8], String w1Name[3], const SensorGroupW1 &w1Sensors)
+{
+  for (size_t i = 0; i < w1Sensors.sensors.size(); ++i)
+  {
+    // Populate w1Name
+    w1Name[i] = String(w1Sensors.sensors[i].name.c_str()); // Convert std::string to Arduino String
+
+    // Populate w1Address
+    for (size_t j = 0; j < w1Sensors.sensors[i].HEX_ARRAY.size(); ++j)
+    {
+      w1Address[i][j] = w1Sensors.sensors[i].HEX_ARRAY[j];
+    }
+  }
+}
+
 void setup()
 {
   // Serial port for debugging purposes
@@ -528,6 +545,9 @@ void setup()
     {
       // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
       loadW1SensorConfigFromFile(SPIFFS, "/w1Json", w1Sensors); // moved away from coupleing file name of storage to teh paramMetaData. maybe i should use it. nov'24
+
+      // populate the arrays that TemperatureSensor consumes
+      populateW1Addresses(w1Address, w1Name, w1Sensors);
     }
     // Add else if blocks here for loading other specific parameter types if needed
   }

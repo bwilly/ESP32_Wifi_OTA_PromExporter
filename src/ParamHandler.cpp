@@ -4,6 +4,8 @@
 #include "SPIFFS.h"
 #include "shared_vars.h"
 #include <iostream>
+#include <array>
+#include <string>
 
 // debug
 void printHexArrayContents(int sensorIndex)

@@ -35,8 +35,8 @@ bool w1Enabled;
 bool dhtEnabled;
 bool mqttEnabled;
 String mainDelay;
-uint8_t w1Address[3][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023
-String w1Name[3];        // todo:remove after refactor Nov8'24
+uint8_t w1Address[3][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023. Yes me, i'd be correct. Nov11'24
+String w1Name[3];        // todo:remove this and above after refactor Nov8'24
 // std::array<W1Sensor, 3> w1Sensor;
 
 // uint8_t w1Sensors[];
