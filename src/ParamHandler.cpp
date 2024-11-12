@@ -5,35 +5,178 @@
 #include "shared_vars.h"
 #include <iostream>
 
+// debug
+void printHexArrayContents(int sensorIndex)
+{
+    if (sensorIndex < 0 || sensorIndex >= w1Sensors.sensors.size())
+    {
+        Serial.println("Error: Sensor index out of bounds.");
+        return;
+    }
+
+    Serial.print("Sensor contents via printHexArrayContents(int sensorIndex");
+    Serial.print(sensorIndex);
+    Serial.print(": ");
+
+    for (int i = 0; i < w1Sensors.sensors[sensorIndex].HEX_ARRAY.size(); ++i)
+    {
+        Serial.print("0x");
+        Serial.print(w1Sensors.sensors[sensorIndex].HEX_ARRAY[i], HEX);
+        Serial.print(" ");
+    }
+
+    Serial.println();
+}
+
+void printHexArrayContentsViaArgs(int sensorIndex, SensorGroupW1 sensorGroup)
+{
+    if (sensorIndex < 0 || sensorIndex >= sensorGroup.sensors.size())
+    {
+        Serial.println("Error: Sensor index out of bounds.");
+        return;
+    }
+
+    Serial.print("Sensor contents via printHexArrayContentsViaArgs(int sensorIndex, SensorGroupW1 sensorGroup");
+    Serial.print(sensorIndex);
+    Serial.print(": ");
+
+    for (int i = 0; i < sensorGroup.sensors[sensorIndex].HEX_ARRAY.size(); ++i)
+    {
+        Serial.print("0x");
+        Serial.print(sensorGroup.sensors[sensorIndex].HEX_ARRAY[i], HEX);
+        Serial.print(" ");
+    }
+
+    Serial.println();
+}
+
 // todo: refactor this is copy/paste from SpiffsHandler.cpp
 // void parseHexToArray_dup(const String &value, uint8_t array[8])
-void parseHexToArray_dup(const String &value, std::array<uint8_t, 8> intoArray)
+// example input: {0x28, 0x95, 0x93, 0x49, 0xf6, 0xcc, 0x3c, 0x76}
+std::array<uint8_t, 8> parseHexToArray_dup(const String &value)
 {
+    std::array<uint8_t, 8> intoArray{}; // Create and initialize the array
     int startIndex = value.indexOf('{');
     int endIndex = value.indexOf('}');
 
     if (startIndex != -1 && endIndex != -1)
     {
         String subValue = value.substring(startIndex + 1, endIndex);
-
         int byteCount = 0;
         int commaIndex;
-        while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
+
+        // Parse each comma-separated hex byte
+        while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < intoArray.size())
         {
-            // String byteStr = subValue.substring(0, commaIndex).trim();
+            // below line was returned from Chat 4 classic and woudln't compile.
+            // String byteStr = subValue.substring(0, commaIndex).trim(); // Trim any spaces around the byte
             String byteStr = subValue.substring(0, commaIndex);
-            byteStr.trim();
+            byteStr.trim(); // Correct usage of trim
+
             intoArray[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
 
+            // Print each parsed byte for verification
+            Serial.print("Parsed hex: ");
+            Serial.println("0x" + String(intoArray[byteCount], HEX));
+
+            // Move to the next part of the string
             subValue = subValue.substring(commaIndex + 1);
             byteCount++;
         }
-        if (byteCount < W1_NUM_BYTES)
-        { // Process the last byte
+
+        // Process the last byte (after the final comma)
+        if (byteCount < intoArray.size())
+        {
+            subValue.trim(); // Trim any spaces around the last byte
             intoArray[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+
+            // Print the last parsed byte
+            Serial.print("Parsed hex: ");
+            Serial.println("0x" + String(intoArray[byteCount], HEX));
+        }
+        else
+        {
+            Serial.println("Error. Hex array size exceeded.");
         }
     }
+    else
+    {
+        Serial.println("Error. Braces not found in input string.");
+    }
+
+    // Verify that the entire array is populated
+    Serial.print("Final array contents: ");
+    for (auto hex : intoArray)
+    {
+        Serial.print("0x");
+        Serial.print(hex, HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+
+    return intoArray; // Return the populated array
 }
+
+// void parseHexToArray_dup(const String &value, std::array<uint8_t, 8> &intoArray)
+// {
+//     int startIndex = value.indexOf('{');
+//     int endIndex = value.indexOf('}');
+
+//     if (startIndex != -1 && endIndex != -1)
+//     {
+//         String subValue = value.substring(startIndex + 1, endIndex);
+
+//         int byteCount = 0;
+//         int commaIndex;
+
+//         // Parse each comma-separated hex byte
+//         while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < intoArray.size())
+//         {
+//             String byteStr = subValue.substring(0, commaIndex);
+//             byteStr.trim(); // Trim any spaces around the byte
+
+//             // Convert hex string to uint8_t and store in array
+//             intoArray[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+
+//             // Print each parsed byte for verification
+//             Serial.print("Parsed hex: ");
+//             Serial.println("0x" + String(intoArray[byteCount], HEX));
+
+//             // Move to the next part of the string
+//             subValue = subValue.substring(commaIndex + 1);
+//             byteCount++;
+//         }
+
+//         // Process the last byte (after the final comma)
+//         if (byteCount < intoArray.size())
+//         {
+//             subValue.trim(); // Trim any spaces around the last byte
+//             intoArray[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+
+//             // Print the last parsed byte
+//             Serial.print("Parsed hex: ");
+//             Serial.println("0x" + String(intoArray[byteCount], HEX));
+//         }
+//         else
+//         {
+//             Serial.println("Error. Hex array size exceeded.");
+//         }
+
+//         // Verify that the entire array is populated
+//         Serial.print("Final array contents: ");
+//         for (int i = 0; i < intoArray.size(); ++i)
+//         {
+//             Serial.print("0x");
+//             Serial.print(intoArray[i], HEX);
+//             Serial.print(" ");
+//         }
+//         Serial.println();
+//     }
+//     else
+//     {
+//         Serial.println("Error. Braces not found in input string.");
+//     }
+// }
 
 bool startsWithW1(const std::string &name)
 {
@@ -54,26 +197,23 @@ bool endsWithName(const std::string &name)
 
 int getSensorArrayIndex(const std::string &name)
 {
-    // Find the start position of the number after "w1-"
-    std::size_t pos = name.find("w1-");
-    if (pos == std::string::npos)
+    if (name.size() < 4 || name.substr(0, 3) != "w1-")
     {
-        return -1; // Return -1 if the pattern is not found
+        return -1; // Check if the format starts with "w1-" and is long enough
     }
 
-    pos += 3; // Move past "w1-"
+    // The fourth character is the sensor index, directly convert it to integer
+    char indexChar = name[3]; // Assuming the index is the fourth character
 
-    // Extract the number portion and convert it to an integer
-    std::size_t endPos = name.find("-", pos);
-    if (endPos == std::string::npos)
+    // Check if the character is a digit
+    if (!isdigit(indexChar))
     {
-        return -1; // Return -1 if there's no following dash
+        return -1;
     }
 
-    int sensorPosition = std::stoi(name.substr(pos, endPos - pos));
+    int sensorPosition = indexChar - '0'; // Convert char to int
 
-    // Convert to zero-based index
-    return sensorPosition - 1;
+    return sensorPosition - 1; // Convert to zero-based index
 }
 
 // Loop the list of expected, pre-defined params
@@ -99,6 +239,8 @@ void handlePostParameters(AsyncWebServerRequest *request)
                 {
                     int index = getSensorArrayIndex(paramMetadata.name.c_str());
 
+                    Serial.println("Sensor Index: " + String(index) + " for " + paramMetadata.name.c_str());
+
                     if (endsWithName(paramMetadata.name.c_str()))
                     {
 
@@ -106,7 +248,20 @@ void handlePostParameters(AsyncWebServerRequest *request)
                     }
                     else
                     { // the string of hex vals
-                        parseHexToArray_dup(value, w1Sensors.sensors[index].HEX_ARRAY);
+                        w1Sensors.sensors[index].HEX_ARRAY = parseHexToArray_dup(value);
+
+                        // Verify that the entire array is populated
+                        Serial.print("Final array contents after return to ParamHandler: ");
+                        for (int i = 0; i < w1Sensors.sensors[index].HEX_ARRAY.size(); ++i)
+                        {
+                            Serial.print("0x");
+                            Serial.print(w1Sensors.sensors[index].HEX_ARRAY[i], HEX);
+                            Serial.print(" ");
+                        }
+                        Serial.println();
+
+                        printHexArrayContents(0);
+                        printHexArrayContentsViaArgs(index, w1Sensors);
                     }
                 }
                 else
@@ -146,8 +301,13 @@ void handlePostParameters(AsyncWebServerRequest *request)
         // Special handling for complex types like w1Address and w1Name
         // ...
     }
+
+    // debug
+    printHexArrayContents(0);
+    printHexArrayContentsViaArgs(0, w1Sensors);
+
     // save the w1 sensors as json to its w1 file
-    saveW1SensorConfigToFile(SPIFFS, "/w1Json");
+    saveW1SensorConfigToFile(SPIFFS, "/w1Json", w1Sensors);
 }
 
 // void handlePostParameters(AsyncWebServerRequest *request)

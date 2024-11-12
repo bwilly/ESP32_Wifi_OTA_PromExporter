@@ -28,5 +28,5 @@ void loadPersistedValues();
 
 String makePath(const char *param); // Declaration of makePath
 // Declare the function to load JSON data from SPIFFS
-void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Sensor, 3> &sensorArray);
-void saveW1SensorConfigToFile(fs::FS &fs, const char *path);
+void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sensors);
+void saveW1SensorConfigToFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sensors);

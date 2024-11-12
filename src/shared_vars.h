@@ -1,4 +1,7 @@
 // In shared_vars.h
+#ifndef SHARED_VARS_H
+#define SHARED_VARS_H
+
 #pragma once
 #include <Arduino.h>
 #include <vector> // Include the vector header
@@ -60,7 +63,7 @@ extern String w1Name[3];        // todo:remove post refactor
 struct W1Sensor
 {
     std::string name;
-    std::array<uint8_t, 8> HEX_ARRAY;
+    std::array<uint8_t, 8> HEX_ARRAY = {};
 };
 
 struct SensorGroupW1
@@ -93,3 +96,4 @@ extern SensorGroupW1 w1Sensors;
 extern std::vector<ParamMetadata> paramList;
 extern std::map<String, String *> paramToVariableMap;
 extern std::map<String, bool *> paramToBoolMap;
+#endif // SHARED_VARS_H

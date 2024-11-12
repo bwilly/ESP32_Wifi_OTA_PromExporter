@@ -182,10 +182,22 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
     }
 }
 
-void saveW1SensorConfigToFile(fs::FS &fs, const char *path)
+void saveW1SensorConfigToFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sensors)
 {
+    Serial.println("Verifying HEX_ARRAY values before JSON serialization:");
+    for (const auto &sensor : w1Sensors.sensors)
+    {
+        Serial.print((sensor.name + ": ").c_str());
+
+        for (auto hex : sensor.HEX_ARRAY)
+        {
+            Serial.printf("0x%02X ", hex);
+        }
+        Serial.println();
+    }
+
     // Create a JSON document
-    StaticJsonDocument<512> doc;
+    DynamicJsonDocument doc(2048);
 
     // Create an array in the JSON document
     JsonArray sensorsArray = doc.createNestedArray("sensors");
@@ -196,13 +208,24 @@ void saveW1SensorConfigToFile(fs::FS &fs, const char *path)
         JsonObject sensorObj = sensorsArray.createNestedObject();
         sensorObj["name"] = sensor.name.c_str();
 
+        // Debug: Print sensor name
+        Serial.print("Processing sensor: ");
+        Serial.println(sensor.name.c_str());
+
         // Create an array for the address
         JsonArray addrArray = sensorObj.createNestedArray("addr");
+
+        // Iterate over each hex value in HEX_ARRAY and add it to JSON
         for (const auto &hex : sensor.HEX_ARRAY)
         {
+            // Format each byte as hex and add to JSON array
             char hexStr[5];                                  // Buffer to hold "0xXX"
             snprintf(hexStr, sizeof(hexStr), "0x%02X", hex); // Format each byte as hex
             addrArray.add(hexStr);
+
+            // Debug: Print each hex value in source array
+            Serial.print("Adding hex value to JSON: ");
+            Serial.println(hexStr);
         }
     }
 
@@ -213,8 +236,9 @@ void saveW1SensorConfigToFile(fs::FS &fs, const char *path)
     // Use writeFile to save the JSON string to the specified path
     writeFile(fs, path, jsonOutput);
 
+    // Debug: Print the entire JSON output to verify final structure
     Serial.println("Saved sensors to JSON file:");
-    Serial.println(jsonOutput); // Optional: print the JSON output for verification
+    Serial.println(jsonOutput);
 }
 
 // void parseAndStoreHex(const String &value, uint8_t index)
@@ -266,7 +290,7 @@ uint8_t hexStringToByte(const char *hexString)
     return static_cast<uint8_t>(byte);
 }
 
-void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Sensor, 3> &sensorArray)
+void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sensors)
 {
     File file = fs.open(path, "r");
     if (!file)
@@ -292,26 +316,26 @@ void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, std::array<W1Senso
     int i = 0;
     for (JsonObject sensorObj : sensorsArray)
     {
-        if (i >= sensorArray.size())
+        if (i >= w1Sensors.sensors.size())
             break;
 
-        sensorArray[i].name = sensorObj["name"].as<const char *>();
+        w1Sensors.sensors[i].name = sensorObj["name"].as<const char *>();
 
-        Serial.println("Hydrated name with: " + String(sensorArray[i].name.c_str()));
+        Serial.println("Hydrated name with: " + String(w1Sensors.sensors[i].name.c_str()));
 
         int j = 0;
         for (JsonVariant hexVal : sensorObj["addr"].as<JsonArray>())
         {
-            if (j >= sensorArray[i].HEX_ARRAY.size())
+            if (j >= w1Sensors.sensors[i].HEX_ARRAY.size())
                 break;
-            sensorArray[i].HEX_ARRAY[j] = hexStringToByte(hexVal.as<const char *>());
+            w1Sensors.sensors[i].HEX_ARRAY[j] = hexStringToByte(hexVal.as<const char *>());
             j++;
         }
         i++;
     }
 
     Serial.println("Loaded sensors from JSON:");
-    for (const auto &sensor : sensorArray)
+    for (const auto &sensor : w1Sensors.sensors)
     {
         Serial.print("Name: ");
         Serial.println(sensor.name.c_str());
