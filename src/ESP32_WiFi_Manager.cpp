@@ -65,6 +65,9 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "HtmlVarProcessor.h"
 #include "TemperatureSensor.h"
 #include "Config.h"
+
+#include "version.h"
+
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "sesp-"
 #define SERVICE_NAME "climate-http"
@@ -75,7 +78,11 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:single-task-longer-wait:Nov-2024" // trying to identify cause of unreliable dht22 readings
+const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: esp32 : single - task - longer - wait : Nov - 2024";
+// trying to identify cause of unreliable dht22 readings
+
+// Serial.println("Application Version: " APP_VERSION);
+// Serial.println("Commit Hash: " APP_COMMIT_HASH);
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -184,7 +191,7 @@ void handleZabbixPing(AsyncWebServerRequest *request)
 // Function to handle Zabbix agent.version
 void handleZabbixVersion(AsyncWebServerRequest *request)
 {
-  request->send(200, "text/plain", version);
+  request->send(200, "text/plain", version.c_str());
 }
 
 // Function to handle system.uptime
@@ -615,7 +622,7 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", version); });
+              { request->send(200, "text/html", version.c_str()); });
 
     server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", pinDht); });
