@@ -78,7 +78,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: esp32 : single - task - longer - wait : Nov - 2024";
+const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: OTA-3 Nov-2024";
 // trying to identify cause of unreliable dht22 readings
 
 // Serial.println("Application Version: " APP_VERSION);
@@ -168,6 +168,26 @@ const int ledPin = 2;
 // Stores LED state
 
 String ledState;
+
+void onOTAEnd(bool success)
+{
+  // Log when OTA has finished
+  if (success)
+  {
+    Serial.println("OTA update finished successfully! Restarting...");
+    ESP.restart();
+  }
+  else
+  {
+    Serial.println("There was an error during OTA update!");
+  }
+  // <Add your own code here>
+}
+void onOTAStart()
+{
+  // Log when OTA has started
+  Serial.println("OTA update started!");
+}
 
 /* Append a semi-unique id to the name template */
 char *MakeMine(const char *NameTemplate)
@@ -665,12 +685,12 @@ void setup()
     // server.serveStatic("/", SPIFFS, "/");
 
     // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
-    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-              {
-      handlePostParameters(request); 
-      request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
-      delay(mainDelay.toInt()); // delay(3000);
-      ESP.restart(); });
+    // server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
+    //           {
+    //   handlePostParameters(request);
+    //   request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
+    //   delay(mainDelay.toInt()); // delay(3000);
+    //   ESP.restart(); });
 
     // Correct the onEnd function signature
     // AsyncElegantOTA.onEnd([](bool success)
@@ -689,6 +709,9 @@ void setup()
     // uses path like server.on("/update")
     // AsyncElegantOTA.begin(&server);
     ElegantOTA.begin(&server);
+    ElegantOTA.onStart(onOTAStart);
+    // ElegantOTA.onProgress(onOTAProgress);
+    ElegantOTA.onEnd(onOTAEnd);
 
     configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity
     time_t now;
@@ -753,6 +776,7 @@ void setup()
       handlePostParameters(request);
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(3000);
+      Serial.println("Updated. Now restarting...");
       ESP.restart(); });
 
     Serial.print("Starting web server...");
