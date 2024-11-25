@@ -123,7 +123,7 @@ unsigned long lastPublishTime_humidity = 0;
 
 // DS18b20
 // Data wire is plugged into port 15 on the ESP32
-#define ONE_WIRE_BUS 23
+#define ONE_WIRE_BUS 23 // todo: externalize Nov20-24
 
 // // Setup a oneWire instance to communicate with any OneWire devices
 // OneWire oneWire(ONE_WIRE_BUS);
@@ -685,12 +685,12 @@ void setup()
     // server.serveStatic("/", SPIFFS, "/");
 
     // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
-    // server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-    //           {
-    //   handlePostParameters(request);
-    //   request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
-    //   delay(mainDelay.toInt()); // delay(3000);
-    //   ESP.restart(); });
+    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
+              {
+      handlePostParameters(request);
+      request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
+      delay(mainDelay.toInt()); // delay(3000);
+      ESP.restart(); });
 
     // Correct the onEnd function signature
     // AsyncElegantOTA.onEnd([](bool success)
