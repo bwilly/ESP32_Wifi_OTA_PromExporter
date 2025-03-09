@@ -61,6 +61,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "ParamHandler.h"
 #include "SpiffsHandler.h"
 #include "DHT_SRL.h"
+#include "ACS712_SRL.h"
 #include "prometheus_srl.h"
 #include "HtmlVarProcessor.h"
 #include "TemperatureSensor.h"
@@ -93,7 +94,7 @@ PubSubClient mqClient(espClient);
 WiFiMulti wifiMulti;
 
 // DNS settings
-IPAddress primaryDNS(10, 27, 1, 30); // Your Raspberry Pi's IP (DNS server)
+IPAddress primaryDNS(10, 27, 1, 30); // Your Raspberry Pi's IP (DNS server) mar'25: why is this here? is it doing anything
 IPAddress secondaryDNS(8, 8, 8, 8);  // Optional: Google DNS
 
 const float THRESHOLD_TEMPERATURE_PERCENTAGE = 3.0;
@@ -537,6 +538,7 @@ void populateW1Addresses(uint8_t w1Address[3][8], String w1Name[3], const Sensor
   }
 }
 
+// Entry point
 void setup()
 {
   // Serial port for debugging purposes
@@ -587,12 +589,17 @@ void setup()
   // Serial.println(ip);
   // Serial.println(gateway);
 
+  // @pattern
   bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
   if (dhtEnabledValue)
   {
     initSensorTask(); // dht
   }
+  if (acs712Enabled){
+    setupACS712();
+  }
 
+  // setup: path1
   if (initWiFi())
   { // Station Mode
     Serial.println("initDNS...");
@@ -744,8 +751,8 @@ void setup()
     Serial.println("Entry setup loop complete.");
   }
   else
-  // SETUP
-  { // This path is meant to run only upon initial setup
+  // SETUP : Path2
+  { // This path is meant to run only upon initial one-time setup
 
     apStartTime = millis(); // Record the start time in AP mode
 
@@ -1016,6 +1023,7 @@ void loop()
     }
     mqClient.loop();
 
+    // @anti-pattern as compared to dhtEnabledValue? Maybe this is the bettr way and the dhtEnabledValue was mean for checkbox population? Mar4'25
     if (dhtEnabled)
     {
       float currentTemperature = readDHTTemperature();
@@ -1129,6 +1137,10 @@ void loop()
         publishTemperature(mqClient, readings[i].value, readings[i].name);
       }
     }
+  }
+
+  if (acs712Enabled) {
+    loopACS712();
   }
 
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop

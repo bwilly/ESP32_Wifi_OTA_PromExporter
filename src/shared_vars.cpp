@@ -10,6 +10,7 @@ const char *PARAM_WIFI_SSID = "ssid";
 const char *PARAM_WIFI_PASS = "pass";
 const char *PARAM_LOCATION = "location";
 const char *PARAM_PIN_DHT = "pinDht"; // wish i could change name convention. see above comment
+const char *PARAM_PIN_ACS = "pinAcs"; 
 const char *PARAM_MQTT_SERVER = "mqtt-server";
 const char *PARAM_MQTT_PORT = "mqtt-port";
 const char *PARAM_MAIN_DELAY = "main-delay";
@@ -22,6 +23,7 @@ const char *PARAM_W1_2_NAME = "w1-2-name";
 const char *PARAM_W1_3_NAME = "w1-3-name";
 const char *PARAM_ENABLE_W1 = "enableW1";
 const char *PARAM_ENABLE_DHT = "enableDHT";
+const char *PARAM_ENABLE_ACS = "enableAcs712";
 const char *PARAM_ENABLE_MQTT = "enableMQTT";
 
 // Variables to save values from HTML form
@@ -29,10 +31,12 @@ String ssid;
 String pass;
 String locationName; // used during regular operation, not only setup
 String pinDht;
+String pinAcs;
 String mqttServer;
 String mqttPort;
 bool w1Enabled;
 bool dhtEnabled;
+bool acs712Enabled;
 bool mqttEnabled;
 String mainDelay;
 uint8_t w1Address[3][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023. Yes me, i'd be correct. Nov11'24
@@ -46,6 +50,7 @@ std::map<String, String *> paramToVariableMap = {
     {"pass", &pass},
     {"location", &locationName},
     {"pinDht", &pinDht},
+    {"pinAcs", &pinAcs},
     {"mqtt-server", &mqttServer},
     {"mqtt-port", &mqttPort},
     {"main-delay", &mainDelay},
@@ -56,6 +61,7 @@ std::map<String, String *> paramToVariableMap = {
 std::map<String, bool *> paramToBoolMap = {
     {"enableW1", &w1Enabled},
     {"enableDHT", &dhtEnabled},
+    {"enableAcs712", &acs712Enabled},
     // {"mqttEnabled", &mqttEnabled}};
     {"enableMQTT", &mqttEnabled}};
 

@@ -17,7 +17,7 @@ SemaphoreHandle_t xSensorDataMutex;
 float temperature = NAN;
 float humidity = NAN;
 
-// Function prototypes
+// Function prototypes [https://chatgpt.com/c/66f37120-74b4-800a-ba48-87c2fc3a22c0]
 void configDHT();
 float roundToHundredth(float number);
 void sensorTask(void *parameter);
@@ -29,7 +29,7 @@ void configDHT()
     if (pinDht != nullptr)
     {
         Serial.println("About to convert pin to int.");
-        int _pinDht = std::stoi(pinDht.c_str());
+        int _pinDht = std::stoi(pinDht.c_str()); // @pattern:toInt #1; todo: not sure if this the legacy way to get the vals. i think i have a pattern from the last 6mos that uses paramToVariableMap :bwilly Mar8'25
         dht = DHT(_pinDht, DHTTYPE); // Reinitialize the DHT object with the correct pin
         dht.begin();                 // Initialize the DHT sensor
     }
