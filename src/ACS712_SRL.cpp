@@ -13,6 +13,12 @@ void ACS712Sensor::begin() {
     Serial.println("Application Version: " APP_VERSION);
     Serial.println("Commit Hash: " APP_COMMIT_HASH);
 
+    // BUG: The following approach is causing GPIO0 to be used instead of the expected pin.
+    // _pinAcs = paramToVariableMap["pinAcs"]->toInt(); // Original approach (temporarily disabled)
+
+    // Temporary fix: Hardcode the pin to GPIO32
+    _pinAcs = 32; // todo: externalize
+
     pinMode(_pinAcs, INPUT);
     Serial.println("ACS712 Current Sensor Initialized on pin " + String(_pinAcs));
 }
