@@ -79,7 +79,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: OTA-3 Nov-2024";
+const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: Spring 2025";
 // trying to identify cause of unreliable dht22 readings
 
 // Serial.println("Application Version: " APP_VERSION);
