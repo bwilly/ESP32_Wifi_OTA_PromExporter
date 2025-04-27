@@ -66,6 +66,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "HtmlVarProcessor.h"
 #include "TemperatureSensor.h"
 #include "Config.h"
+#include "MessagePublisher.h"
+
 
 #include "version.h"
 
@@ -163,6 +165,12 @@ unsigned long previousMillis = 0;
 const long interval = 40000; // interval to wait for Wi-Fi connection (milliseconds)
 unsigned long previous_time = 0;
 unsigned long reconnect_delay = 180000; // 3-min delay
+
+
+
+static bool lastPumpState = false; // Assume OFF at startup
+static bool firstRun = true;       // New flag to force first publish
+
 
 // Set LED GPIO
 const int ledPin = 2;
@@ -809,46 +817,46 @@ void setup()
 //   _client.publish("ship/temperature", buffer);
 // }
 
-void publishTemperature(PubSubClient &_client, float _temperature, String location)
-{
-  const size_t capacity = JSON_OBJECT_SIZE(10);
-  DynamicJsonDocument doc(capacity);
+// void publishTemperature(PubSubClient &_client, float _temperature, String location)
+// {
+//   const size_t capacity = JSON_OBJECT_SIZE(10);
+//   DynamicJsonDocument doc(capacity);
 
-  doc["bn"] = location;
-  doc["n"] = "temperature";
-  doc["u"] = "C";
-  doc["v"] = _temperature;
-  doc["ut"] = (int)time(nullptr);
+//   doc["bn"] = location;
+//   doc["n"] = "temperature";
+//   doc["u"] = "C";
+//   doc["v"] = _temperature;
+//   doc["ut"] = (int)time(nullptr);
 
-  char buffer[512];
-  serializeJson(doc, buffer);
+//   char buffer[512];
+//   serializeJson(doc, buffer);
 
-  Serial.print("Publishing the following to msg broker: ");
-  Serial.println(buffer);
+//   Serial.print("Publishing the following to msg broker: ");
+//   Serial.println(buffer);
 
-  _client.publish("ship/temperature", buffer); // todo: externalize
-}
+//   _client.publish("ship/temperature", buffer); // todo: externalize
+// }
 
-void publishHumidity(PubSubClient &_client, float _humidity, String location)
-{
-  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
-  DynamicJsonDocument doc(capacity);
+// void publishHumidity(PubSubClient &_client, float _humidity, String location)
+// {
+//   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
+//   DynamicJsonDocument doc(capacity);
 
-  JsonObject j = doc.createNestedObject();
-  j["bn"] = location;
-  j["n"] = "humidity";
-  j["u"] = "%";
-  j["v"] = _humidity;
-  j["ut"] = (int)time(nullptr);
+//   JsonObject j = doc.createNestedObject();
+//   j["bn"] = location;
+//   j["n"] = "humidity";
+//   j["u"] = "%";
+//   j["v"] = _humidity;
+//   j["ut"] = (int)time(nullptr);
 
-  char buffer[256];
-  serializeJson(doc, buffer);
+//   char buffer[256];
+//   serializeJson(doc, buffer);
 
-  Serial.print("Publishing the following to msg broker: ");
-  Serial.println(buffer);
+//   Serial.print("Publishing the following to msg broker: ");
+//   Serial.println(buffer);
 
-  _client.publish("ship/humidity", buffer); // todo: externalize
-}
+//   _client.publish("ship/humidity", buffer); // todo: externalize
+// }
 
 // Oct7, '23
 // Telegraf doesn't seem to be able to parse the senml with multiple measures
@@ -948,7 +956,8 @@ void publishSimpleMessage()
   {
     if (mqClient.publish(topic, message))
     {
-      Serial.println("Message published successfully.");
+      Serial.print("Message published successfully: ");
+      Serial.println(message);
     }
     else
     {
@@ -1096,7 +1105,7 @@ void loop()
       if (shouldPublishTempt)
       {
         Serial.println("publishTemperature...");
-        publishTemperature(mqClient, currentTemperature, locationName);
+        MessagePublisher::publishTemperature(mqClient, currentTemperature, locationName);
 
         // Update the previous values after publishing
         previousTemperature = currentTemperature;
@@ -1110,7 +1119,7 @@ void loop()
       if (shouldPublishHumidity)
       {
         Serial.println("publishHumidity...");
-        publishHumidity(mqClient, currentHumidity, locationName);
+        MessagePublisher::publishHumidity(mqClient, currentHumidity, locationName);
 
         // Update the previous values after publishing
         previousHumidity = currentHumidity;
@@ -1134,14 +1143,31 @@ void loop()
       // Check if the reading is valid, e.g., by checking if the name is not empty
       if (!readings[i].name.isEmpty())
       {
-        publishTemperature(mqClient, readings[i].value, readings[i].name);
+        MessagePublisher::publishTemperature(mqClient, readings[i].value, readings[i].name);
       }
     }
   }
 
   if (acs712Enabled) {
-    loopACS712();
-  }
+    float amps = fabs(readACS712Current());
+    Serial.print(amps);
+    Serial.println(" amps");
+
+    bool pumpState = (amps > 2.25);
+
+    if (pumpState) {
+        Serial.println("Pump ON");
+    } else {
+        Serial.println("Pump OFF");
+    }
+
+    if (firstRun || pumpState != lastPumpState) {
+        // Only publish if the pump state changed ...i don't like hiding the visibility of being OFF, but too much data
+        MessagePublisher::publishPumpState(mqClient, pumpState, amps, "engineRoomPump");
+        lastPumpState = pumpState; // Update the last known state
+        firstRun = false;
+    }
+}
 
   delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
 }

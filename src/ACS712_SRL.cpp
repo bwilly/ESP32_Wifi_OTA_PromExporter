@@ -42,7 +42,7 @@ float ACS712Sensor::readCurrentDC() {
 
 
      float Vdiv = rawValue * ADC_MAX_VOLTAGE / ADC_RESOLUTION;
-    Serial.print("Vdiv: "); Serial.println(Vdiv);
+    // Serial.print("Vdiv: "); Serial.println(Vdiv);
 
     // undo divider + scale from offset:
     float amps = (Vdiv - ADC_ZERO_VOLT) / ADC_SENSITIVITY;
@@ -71,3 +71,8 @@ void setupACS712() {
 void loopACS712() {
     sensor.serialOutInfo();
 }
+
+float readACS712Current() {
+  return sensor.readCurrentDC();
+}
+

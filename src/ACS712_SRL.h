@@ -49,5 +49,7 @@ public:
 // Function declarations for external usage
 void setupACS712();
 void loopACS712();
+float readACS712Current();
+
 
 #endif // ACS712SENSOR_H
