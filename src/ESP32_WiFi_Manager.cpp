@@ -1024,7 +1024,7 @@ void loop()
   {
 
     reconnectMQ();
-    publishSimpleMessage(); // manual test
+    // publishSimpleMessage(); // manual test
 
     if (!mqClient.connected())
     {
@@ -1161,7 +1161,7 @@ void loop()
         Serial.println("Pump OFF");
     }
 
-    if (firstRun || pumpState != lastPumpState) {
+    if (firstRun || pumpState != lastPumpState || pumpState) {
         // Only publish if the pump state changed ...i don't like hiding the visibility of being OFF, but too much data
         MessagePublisher::publishPumpState(mqClient, pumpState, amps, "engineRoomPump");
         lastPumpState = pumpState; // Update the last known state
