@@ -81,7 +81,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: Spring 2025";
+const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: Spring-late 2025 ds18b-sixpack shroomer2";
 // trying to identify cause of unreliable dht22 readings
 
 // Serial.println("Application Version: " APP_VERSION);
@@ -531,7 +531,7 @@ void setupDS18b20(void)
 
 // todo:extract to another file
 // Define function to populate w1Address and w1Name from w1Sensors
-void populateW1Addresses(uint8_t w1Address[3][8], String w1Name[3], const SensorGroupW1 &w1Sensors)
+void populateW1Addresses(uint8_t w1Address[6][8], String w1Name[6], const SensorGroupW1 &w1Sensors)
 {
   for (size_t i = 0; i < w1Sensors.sensors.size(); ++i)
   {
@@ -576,7 +576,7 @@ void setup()
 
   // Load parameters from SPIFFS using paramList
   // replaces commented out code directly above
-  for (const auto &paramMetadata : paramList)
+  for (const auto &paramMetadata : paramList) 
   {
     if (paramMetadata.name.startsWith("w1-"))
     {
@@ -798,132 +798,6 @@ void setup()
     server.begin();
   }
 }
-
-// void publishTemperature(PubSubClient &_client, float _temperature, String location)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject j = doc.createNestedObject();
-//   j["bn"] = location;
-//   j["n"] = "temperature";
-//   j["u"] = "C";
-//   j["v"] = _temperature;
-//   j["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   _client.publish("ship/temperature", buffer);
-// }
-
-// void publishTemperature(PubSubClient &_client, float _temperature, String location)
-// {
-//   const size_t capacity = JSON_OBJECT_SIZE(10);
-//   DynamicJsonDocument doc(capacity);
-
-//   doc["bn"] = location;
-//   doc["n"] = "temperature";
-//   doc["u"] = "C";
-//   doc["v"] = _temperature;
-//   doc["ut"] = (int)time(nullptr);
-
-//   char buffer[512];
-//   serializeJson(doc, buffer);
-
-//   Serial.print("Publishing the following to msg broker: ");
-//   Serial.println(buffer);
-
-//   _client.publish("ship/temperature", buffer); // todo: externalize
-// }
-
-// void publishHumidity(PubSubClient &_client, float _humidity, String location)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject j = doc.createNestedObject();
-//   j["bn"] = location;
-//   j["n"] = "humidity";
-//   j["u"] = "%";
-//   j["v"] = _humidity;
-//   j["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   Serial.print("Publishing the following to msg broker: ");
-//   Serial.println(buffer);
-
-//   _client.publish("ship/humidity", buffer); // todo: externalize
-// }
-
-// Oct7, '23
-// Telegraf doesn't seem to be able to parse the senml with multiple measures
-/**
- * Output Message
- *
- * [{"bn":"sensor:12345"},{"n":"temperature","u":"C","v":17.60000038,"ut":1139},{"n":"humidity","u":"%","v":69.30000305,"ut":1139}]
- *
- */
-// void publishTemperatureHumidity(PubSubClient &_client, float _temperature, float _humidity)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject obj1 = doc.createNestedObject();
-//   obj1["bn"] = "sensor:12345";
-
-//   JsonObject obj2 = doc.createNestedObject();
-//   obj2["n"] = "temperature";
-//   obj2["u"] = "C";
-//   obj2["v"] = _temperature;
-//   // obj2["v"] = static_cast<float>(_temperature);
-//   obj2["ut"] = (int)time(nullptr);
-
-//   JsonObject obj3 = doc.createNestedObject();
-//   obj3["n"] = "humidity";
-//   obj3["u"] = "%";
-//   obj3["v"] = _humidity;
-//   // obj3["v"] = static_cast<float>(_humidity);
-//   obj3["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   // _client.publish("ship/temperature", buffer);
-//   // _client.publish("ship/humidity", buffer);
-
-//   _client.publish("ship/climate", buffer);
-// }
-
-// void publishTemperatureHumidity(PubSubClient &_client, String _temperature, String _humidity)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject obj1 = doc.createNestedObject();
-//   obj1["bn"] = "sensor:12345";
-
-//   JsonObject obj2 = doc.createNestedObject();
-//   obj2["n"] = "temperature";
-//   obj2["u"] = "C";
-//   obj2["v"] = _temperature;
-//   obj2["ut"] = (int)time(nullptr);
-
-//   JsonObject obj3 = doc.createNestedObject();
-//   obj3["n"] = "humidity";
-//   obj3["u"] = "%";
-//   obj3["v"] = _humidity;
-//   obj3["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   Serial.print("Completed json serialization for queue publish. Now publishing...");
-//   _client.publish("ship/temperature", buffer);
-//   _client.publish("ship/humidity", buffer);
-// }
 
 void reconnectMQ()
 {

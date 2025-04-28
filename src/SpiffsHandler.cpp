@@ -241,45 +241,6 @@ void saveW1SensorConfigToFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sen
     Serial.println(jsonOutput);
 }
 
-// void parseAndStoreHex(const String &value, uint8_t index)
-// {
-//     int startIndex = value.indexOf('{');
-//     int endIndex = value.indexOf('}');
-
-//     if (startIndex != -1 && endIndex != -1)
-//     {
-//         String subValue = value.substring(startIndex + 1, endIndex);
-
-//         int byteCount = 0;
-//         int commaIndex;
-//         while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
-//         {
-//             // String byteStr = subValue.substring(0, commaIndex).trim();
-//             String byteStr = subValue.substring(0, commaIndex);
-//             byteStr.trim();
-
-//             w1Address[index][byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
-
-//             subValue = subValue.substring(commaIndex + 1);
-//             byteCount++;
-//         }
-//         if (byteCount < W1_NUM_BYTES)
-//         { // Process the last byte
-//             w1Address[index][byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
-//         }
-//     }
-
-//     // Debug output
-//     for (int i = 0; i < W1_NUM_BYTES; i++)
-//     {
-//         Serial.print("w1Address[");
-//         Serial.print(index);
-//         Serial.print("][");
-//         Serial.print(i);
-//         Serial.print("] = ");
-//         Serial.println(w1Address[index][i], HEX);
-//     }
-// }
 
 uint8_t hexStringToByte(const char *hexString)
 {
