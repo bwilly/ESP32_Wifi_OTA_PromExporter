@@ -1,6 +1,10 @@
+#define MQTT_MAX_PACKET_SIZE 512
+#define MQTT_DEBUG
+
 #include "MessagePublisher.h"
 #include <Arduino.h>
 #include <time.h>
+#include <BufferedLogger.h>
 
 namespace {
     constexpr char TEMPERATURE_TOPIC[] = "ship/temperature";
@@ -25,7 +29,17 @@ void MessagePublisher::publishTemperature(PubSubClient &client, float temperatur
     Serial.print("Publishing the following to msg broker: ");
     Serial.println(buffer);
 
-    client.publish("TEMPERATURE_TOPIC", buffer);
+    if (!client.connected()) {
+        logger.log("MQTT client disconnected before publish!");
+  
+    }
+
+    bool ok = client.publish(TEMPERATURE_TOPIC, buffer);
+    if (ok) {
+        logger.log("Msg pub ok \n");
+    } else {
+        logger.log("Msg pub FAIL \n");
+    }
 }
 
 void MessagePublisher::publishHumidity(PubSubClient &client, float humidity, const String &location) {
@@ -45,7 +59,7 @@ void MessagePublisher::publishHumidity(PubSubClient &client, float humidity, con
     Serial.print("Publishing the following to msg broker: ");
     Serial.println(buffer);
 
-    client.publish("HUMIDITY_TOPIC", buffer);
+    client.publish(HUMIDITY_TOPIC, buffer);
 }
 
 // void MessagePublisher::publishPumpState(PubSubClient &client, bool isOn, const String &location) {
