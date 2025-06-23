@@ -4,7 +4,7 @@
 // Climate Sensor
 // Prometheus Exporter
 // Copywrite 2022-2023
-// Copyright 2022-2023
+// Copyright 2022-2023, 2024
 
 // Unstable Wifi post network/wifi failure
       - plan for fix here is to switch base wifi platform code away from Rui Santos to
@@ -61,10 +61,26 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "ParamHandler.h"
 #include "SpiffsHandler.h"
 #include "DHT_SRL.h"
+#include "ACS712_SRL.h"
 #include "prometheus_srl.h"
 #include "HtmlVarProcessor.h"
 #include "TemperatureSensor.h"
 #include "Config.h"
+#include "MessagePublisher.h"
+
+
+#include "version.h"
+// #include <TelnetStream.h>
+
+#include <AsyncTelnetSerial.h>
+#include <AsyncTCP.h>              // dependency for the async streams
+
+#include <BufferedLogger.h>
+#include "TelnetBridge.h"
+
+// extern AsyncTelnetSerial telnetSerial;
+// static AsyncTelnetSerial telnetSerial(&Serial);
+
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "sesp-"
 #define SERVICE_NAME "climate-http"
@@ -75,7 +91,11 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-#define version "esp32:single-task-longer-wait:Nov-2024" // trying to identify cause of unreliable dht22 readings
+const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: TelnetBridge";
+// trying to identify cause of unreliable dht22 readings
+
+// Serial.println("Application Version: " APP_VERSION);
+// Serial.println("Commit Hash: " APP_COMMIT_HASH);
 
 // MQTT Server details
 // const char *mqtt_server = "192.168.68.120"; // todo: change to config param
@@ -86,7 +106,7 @@ PubSubClient mqClient(espClient);
 WiFiMulti wifiMulti;
 
 // DNS settings
-IPAddress primaryDNS(10, 27, 1, 30); // Your Raspberry Pi's IP (DNS server)
+IPAddress primaryDNS(10, 27, 1, 30); // Your Raspberry Pi's IP (DNS server) mar'25: why is this here? is it doing anything
 IPAddress secondaryDNS(8, 8, 8, 8);  // Optional: Google DNS
 
 const float THRESHOLD_TEMPERATURE_PERCENTAGE = 3.0;
@@ -116,7 +136,7 @@ unsigned long lastPublishTime_humidity = 0;
 
 // DS18b20
 // Data wire is plugged into port 15 on the ESP32
-#define ONE_WIRE_BUS 23
+#define ONE_WIRE_BUS 23 // todo: externalize Nov20-24
 
 // // Setup a oneWire instance to communicate with any OneWire devices
 // OneWire oneWire(ONE_WIRE_BUS);
@@ -124,7 +144,7 @@ unsigned long lastPublishTime_humidity = 0;
 // // Pass our oneWire reference to Dallas Temperature.
 // DallasTemperature sensors(&oneWire);
 
-OneWire oneWire(ONE_WIRE_BUS);
+OneWire oneWire(ONE_WIRE_BUS); // todo:externalize I/O port nov'24
 // Create a TemperatureSensor instance
 TemperatureSensor temptSensor(&oneWire); // Dallas
 
@@ -156,11 +176,37 @@ const long interval = 40000; // interval to wait for Wi-Fi connection (milliseco
 unsigned long previous_time = 0;
 unsigned long reconnect_delay = 180000; // 3-min delay
 
+
+
+static bool lastPumpState = false; // Assume OFF at startup
+static bool firstRun = true;       // New flag to force first publish
+
+
 // Set LED GPIO
 const int ledPin = 2;
 // Stores LED state
 
 String ledState;
+
+void onOTAEnd(bool success)
+{
+  // Log when OTA has finished
+  if (success)
+  {
+    Serial.println("OTA update finished successfully! Restarting...");
+    ESP.restart();
+  }
+  else
+  {
+    Serial.println("There was an error during OTA update!");
+  }
+  // <Add your own code here>
+}
+void onOTAStart()
+{
+  // Log when OTA has started
+  Serial.println("OTA update started!");
+}
 
 /* Append a semi-unique id to the name template */
 char *MakeMine(const char *NameTemplate)
@@ -184,7 +230,7 @@ void handleZabbixPing(AsyncWebServerRequest *request)
 // Function to handle Zabbix agent.version
 void handleZabbixVersion(AsyncWebServerRequest *request)
 {
-  request->send(200, "text/plain", version);
+  request->send(200, "text/plain", version.c_str());
 }
 
 // Function to handle system.uptime
@@ -248,7 +294,7 @@ void initZabbixServer()
   zabbixServer.on("/signal", HTTP_GET, handleWiFiSignalStrength);
   zabbixServer.on("/availability", HTTP_GET, handleAvailability);
   zabbixServer.begin();
-  Serial.println("Zabbix agent server started on port 10050");
+  logger.log("Zabbix agent server started on port 10050\n");
 }
 
 String printAddressAsString(DeviceAddress deviceAddress)
@@ -493,10 +539,30 @@ void setupDS18b20(void)
   // Sensor 3 : 0x28, 0xC5, 0xE1, 0x49, 0xF6, 0x50, 0x3C, 0x38
 }
 
+// todo:extract to another file
+// Define function to populate w1Address and w1Name from w1Sensors
+void populateW1Addresses(uint8_t w1Address[6][8], String w1Name[6], const SensorGroupW1 &w1Sensors)
+{
+  for (size_t i = 0; i < w1Sensors.sensors.size(); ++i)
+  {
+    // Populate w1Name
+    w1Name[i] = String(w1Sensors.sensors[i].name.c_str()); // Convert std::string to Arduino String
+
+    // Populate w1Address
+    for (size_t j = 0; j < w1Sensors.sensors[i].HEX_ARRAY.size(); ++j)
+    {
+      w1Address[i][j] = w1Sensors.sensors[i].HEX_ARRAY[j];
+    }
+  }
+}
+
+// Entry point
 void setup()
 {
   // Serial port for debugging purposes
   Serial.begin(115200);
+  
+  
 
   // Enable verbose logging for the WiFi component
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
@@ -522,25 +588,15 @@ void setup()
 
   // Load parameters from SPIFFS using paramList
   // replaces commented out code directly above
-  for (const auto &paramMetadata : paramList)
+  for (const auto &paramMetadata : paramList) 
   {
     if (paramMetadata.name.startsWith("w1-"))
     {
-      // If the parameter name starts with "w1-", it's related to w1Address or w1Name
-      if (paramMetadata.name.endsWith("-name"))
-      {
-        // This is a w1Name parameter
-        int index = (paramMetadata.name == "w1-1-name") ? 0 : (paramMetadata.name == "w1-2-name") ? 1
-                                                                                                  : 2;
-        w1Name[index] = readFile(SPIFFS, paramMetadata.spiffsPath.c_str());
-      }
-      else
-      {
-        // This is a w1Address parameter
-        int index = (paramMetadata.name == "w1-1") ? 0 : (paramMetadata.name == "w1-2") ? 1
-                                                                                        : 2;
-        loadW1AddressFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), index);
-      }
+      // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
+      loadW1SensorConfigFromFile(SPIFFS, "/w1Json", w1Sensors); // moved away from coupleing file name of storage to teh paramMetaData. maybe i should use it. nov'24
+
+      // populate the arrays that TemperatureSensor consumes
+      populateW1Addresses(w1Address, w1Name, w1Sensors);
     }
     // Add else if blocks here for loading other specific parameter types if needed
   }
@@ -553,17 +609,44 @@ void setup()
   // Serial.println(ip);
   // Serial.println(gateway);
 
-  initSensorTask(); // dht
+  // @pattern
+  bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
+  if (dhtEnabledValue)
+  {
+    initSensorTask(); // dht
+  }
+  if (acs712Enabled){
+    setupACS712();
+  }
 
+  // setup: path1
   if (initWiFi())
   { // Station Mode
-    Serial.println("initDNS...");
+    
+    // Start Telnet stream
+    // TelnetStream.begin();            // start Telnet server on port 23
+    // initTelnet();  
+
+
+    // (B) Start async Telnet-to-Serial forwarding:
+    //     - 115200 is the baudrate to mirror (must match Serial.begin)
+    //     - true  = link Telnet <-> Serial
+    //     - false = don’t publish mDNS name
+    
+    // telnetSerial.begin(115200, true, false);
+    
+    // start our async Telnet server
+  initTelnetServer();
+    logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
+
+    
+    logger.log("initDNS...\n");
     initDNS();
 
     // Initialize Zabbix agent server
     initZabbixServer();
 
-    Serial.println("set web root /index.html...");
+    logger.log("set web root /index.html...\n");
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
@@ -604,7 +687,7 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", version); });
+              { request->send(200, "text/html", version.c_str()); });
 
     server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", pinDht); });
@@ -649,7 +732,7 @@ void setup()
     // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
               {
-      handlePostParameters(request); 
+      handlePostParameters(request);
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(mainDelay.toInt()); // delay(3000);
       ESP.restart(); });
@@ -671,21 +754,25 @@ void setup()
     // uses path like server.on("/update")
     // AsyncElegantOTA.begin(&server);
     ElegantOTA.begin(&server);
+    ElegantOTA.onStart(onOTAStart);
+    // ElegantOTA.onProgress(onOTAProgress);
+    ElegantOTA.onEnd(onOTAEnd);
 
     configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity
     time_t now;
     while (!(time(&now)))
     { // Wait for time to be set
-      Serial.println("Waiting for time...");
+      logger.log("Waiting for time...\n");
       delay(1000);
     }
 
     server.begin();
 
     // Set MQTT server
-    Serial.println("Setting MQTT server and port...");
-    Serial.println(*paramToVariableMap["mqtt-server"]);
-    Serial.println(*paramToVariableMap["mqtt-port"]);
+    logger.log("Setting MQTT server and port...\n");
+    logger.log(*paramToVariableMap["mqtt-server"]);
+    logger.log(*paramToVariableMap["mqtt-port"]);
+    logger.log("\n");
 
     if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
         paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
@@ -698,13 +785,14 @@ void setup()
     }
     else
     {
-      Serial.println("Error setting MQTT from params.");
+      logger.log("Error setting MQTT from params.\n");
     }
-    Serial.println("Entry setup loop complete.");
+    logger.log("\nEntry setup loop complete.");
+    
   }
   else
-  // SETUP
-  { // This path is meant to run only upon initial setup
+  // SETUP : Path2
+  { // This path is meant to run only upon initial one-time setup
 
     apStartTime = millis(); // Record the start time in AP mode
 
@@ -722,167 +810,42 @@ void setup()
       Serial.println("SPIFFS is out of scope per bwilly!");
     }
     // Web Server Root URL
-    Serial.print("Setting web root path to /wifimanager.html... ");
+    Serial.print("Setting web root path to /wifimanager.html...\n");
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
 
-    Serial.print("Setting root POST and delegating to handlePostParameters...");
+    Serial.print("Setting root POST and delegating to handlePostParameters...\n");
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
               {
       handlePostParameters(request);
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(3000);
+      logger.log("Updated. Now restarting...\n");
       ESP.restart(); });
 
-    Serial.print("Starting web server...");
+    logger.log("Starting web server...\n");
     server.begin();
   }
 }
-
-// void publishTemperature(PubSubClient &_client, float _temperature, String location)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject j = doc.createNestedObject();
-//   j["bn"] = location;
-//   j["n"] = "temperature";
-//   j["u"] = "C";
-//   j["v"] = _temperature;
-//   j["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   _client.publish("ship/temperature", buffer);
-// }
-
-void publishTemperature(PubSubClient &_client, float _temperature, String location)
-{
-  const size_t capacity = JSON_OBJECT_SIZE(10);
-  DynamicJsonDocument doc(capacity);
-
-  doc["bn"] = location;
-  doc["n"] = "temperature";
-  doc["u"] = "C";
-  doc["v"] = _temperature;
-  doc["ut"] = (int)time(nullptr);
-
-  char buffer[512];
-  serializeJson(doc, buffer);
-
-  Serial.print("Publishing the following to msg broker: ");
-  Serial.println(buffer);
-
-  _client.publish("ship/temperature", buffer); // todo: externalize
-}
-
-void publishHumidity(PubSubClient &_client, float _humidity, String location)
-{
-  const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
-  DynamicJsonDocument doc(capacity);
-
-  JsonObject j = doc.createNestedObject();
-  j["bn"] = location;
-  j["n"] = "humidity";
-  j["u"] = "%";
-  j["v"] = _humidity;
-  j["ut"] = (int)time(nullptr);
-
-  char buffer[256];
-  serializeJson(doc, buffer);
-
-  Serial.print("Publishing the following to msg broker: ");
-  Serial.println(buffer);
-
-  _client.publish("ship/humidity", buffer); // todo: externalize
-}
-
-// Oct7, '23
-// Telegraf doesn't seem to be able to parse the senml with multiple measures
-/**
- * Output Message
- *
- * [{"bn":"sensor:12345"},{"n":"temperature","u":"C","v":17.60000038,"ut":1139},{"n":"humidity","u":"%","v":69.30000305,"ut":1139}]
- *
- */
-// void publishTemperatureHumidity(PubSubClient &_client, float _temperature, float _humidity)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject obj1 = doc.createNestedObject();
-//   obj1["bn"] = "sensor:12345";
-
-//   JsonObject obj2 = doc.createNestedObject();
-//   obj2["n"] = "temperature";
-//   obj2["u"] = "C";
-//   obj2["v"] = _temperature;
-//   // obj2["v"] = static_cast<float>(_temperature);
-//   obj2["ut"] = (int)time(nullptr);
-
-//   JsonObject obj3 = doc.createNestedObject();
-//   obj3["n"] = "humidity";
-//   obj3["u"] = "%";
-//   obj3["v"] = _humidity;
-//   // obj3["v"] = static_cast<float>(_humidity);
-//   obj3["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   // _client.publish("ship/temperature", buffer);
-//   // _client.publish("ship/humidity", buffer);
-
-//   _client.publish("ship/climate", buffer);
-// }
-
-// void publishTemperatureHumidity(PubSubClient &_client, String _temperature, String _humidity)
-// {
-//   const size_t capacity = JSON_ARRAY_SIZE(3) + 3 * JSON_OBJECT_SIZE(4);
-//   DynamicJsonDocument doc(capacity);
-
-//   JsonObject obj1 = doc.createNestedObject();
-//   obj1["bn"] = "sensor:12345";
-
-//   JsonObject obj2 = doc.createNestedObject();
-//   obj2["n"] = "temperature";
-//   obj2["u"] = "C";
-//   obj2["v"] = _temperature;
-//   obj2["ut"] = (int)time(nullptr);
-
-//   JsonObject obj3 = doc.createNestedObject();
-//   obj3["n"] = "humidity";
-//   obj3["u"] = "%";
-//   obj3["v"] = _humidity;
-//   obj3["ut"] = (int)time(nullptr);
-
-//   char buffer[256];
-//   serializeJson(doc, buffer);
-
-//   Serial.print("Completed json serialization for queue publish. Now publishing...");
-//   _client.publish("ship/temperature", buffer);
-//   _client.publish("ship/humidity", buffer);
-// }
 
 void reconnectMQ()
 {
   // while (!mqClient.connected() && (WiFi.getMode() == WIFI_AP))
   while (!mqClient.connected())
   {
-    Serial.print("Attempting MQTT connection...");
+    logger.log("Attempting MQTT connection...");
     if (mqClient.connect(MakeMine(MDNS_DEVICE_NAME)))
     {
-      Serial.println("connected");
+      logger.log("connected\n");
     }
     else
     {
-      Serial.print("failed, rc=");
-      Serial.print(mqClient.state());
-      Serial.println(" try again in 5 seconds");
+      logger.log("failed, rc=");
+      logger.log(mqClient.state());
+      logger.log(" try again in 5 seconds\n");
       delay(5000);
     }
   }
@@ -899,7 +862,8 @@ void publishSimpleMessage()
   {
     if (mqClient.publish(topic, message))
     {
-      Serial.println("Message published successfully.");
+      Serial.print("Message published successfully: ");
+      Serial.println(message);
     }
     else
     {
@@ -966,7 +930,7 @@ void loop()
   {
 
     reconnectMQ();
-    publishSimpleMessage(); // manual test
+    // publishSimpleMessage(); // manual test
 
     if (!mqClient.connected())
     {
@@ -974,6 +938,7 @@ void loop()
     }
     mqClient.loop();
 
+    // @anti-pattern as compared to dhtEnabledValue? Maybe this is the bettr way and the dhtEnabledValue was mean for checkbox population? Mar4'25
     if (dhtEnabled)
     {
       float currentTemperature = readDHTTemperature();
@@ -997,56 +962,58 @@ void loop()
       {
         shouldPublishTempt = true;
       }
-      Serial.print("Temperature changed from ");
-      Serial.print(previousTemperature);
-      Serial.print(" to ");
-      Serial.print(currentTemperature);
-      Serial.print(". Percentage change: ");
-      Serial.println(tempChange);
+      logger.log("Temperature changed from ");
+      logger.log(previousTemperature);
+      logger.log(" to ");
+      logger.log(currentTemperature);
+      logger.log(". Percentage change: ");
+      logger.log(tempChange);
+      logger.log("\n");
 
       // Check humidity change criteria
       if (humidityChange >= THRESHOLD_HUMIDITY_PERCENTAGE)
       {
         shouldPublishHumidity = true;
       }
-      Serial.print("Humidity changed from ");
-      Serial.print(previousHumidity);
-      Serial.print(" to ");
-      Serial.print(currentHumidity);
-      Serial.print(". Percentage change: ");
-      Serial.println(humidityChange);
+      logger.log("Humidity changed from ");
+      logger.log(previousHumidity);
+      logger.log(" to ");
+      logger.log(currentHumidity);
+      logger.log(". Percentage change: ");
+      logger.log(humidityChange);
+      logger.log("\n");
 
       // Check time interval criteria for temperature
       if (timeSinceLastPublishTempt >= PUBLISH_INTERVAL)
       {
         shouldPublishTempt = true;
-        Serial.println("Time interval since last temperature publish is greater than the defined threshold. Publishing...");
+        logger.log("Time interval since last temperature publish is greater than the defined threshold. Publishing...\n");
       }
       else
       {
-        Serial.print("Time to next threshold publish for temperature: ");
-        Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishTempt) / 1000);
-        Serial.println(" seconds.");
+        logger.log("Time to next threshold publish for temperature: ");
+        logger.log((PUBLISH_INTERVAL - timeSinceLastPublishTempt) / 1000);
+        logger.log(" seconds.\n");
       }
 
       // Check time interval criteria for humidity
       if (timeSinceLastPublishHumidity >= PUBLISH_INTERVAL)
       {
         shouldPublishHumidity = true;
-        Serial.println("Time interval since last humidity publish is greater than the defined threshold. Publishing...");
+        logger.log("Time interval since last humidity publish is greater than the defined threshold. Publishing...\n");
       }
       else
       {
-        Serial.print("Time to next threshold publish for humidity: ");
-        Serial.print((PUBLISH_INTERVAL - timeSinceLastPublishHumidity) / 1000);
-        Serial.println(" seconds.");
+        logger.log("Time to next threshold publish for humidity: ");
+        logger.log((PUBLISH_INTERVAL - timeSinceLastPublishHumidity) / 1000);
+        logger.log(" seconds.\n");
       }
 
       // Publishing based on the individual checks
       if (shouldPublishTempt)
       {
-        Serial.println("publishTemperature...");
-        publishTemperature(mqClient, currentTemperature, locationName);
+        logger.log("publishTemperature...\n");
+        MessagePublisher::publishTemperature(mqClient, currentTemperature, locationName);
 
         // Update the previous values after publishing
         previousTemperature = currentTemperature;
@@ -1054,13 +1021,13 @@ void loop()
       }
       else
       {
-        Serial.println("Skipping publish temperature.");
+        logger.log("Skipping publish temperature.\n");
       }
 
       if (shouldPublishHumidity)
       {
-        Serial.println("publishHumidity...");
-        publishHumidity(mqClient, currentHumidity, locationName);
+        logger.log("publishHumidity...\n");
+        MessagePublisher::publishHumidity(mqClient, currentHumidity, locationName);
 
         // Update the previous values after publishing
         previousHumidity = currentHumidity;
@@ -1068,9 +1035,9 @@ void loop()
       }
       else
       {
-        Serial.println("Skipping publish humidity.");
+        logger.log("Skipping publish humidity.\n");
       }
-      Serial.println("");
+      logger.log("\n");
     }
   }
 
@@ -1084,10 +1051,52 @@ void loop()
       // Check if the reading is valid, e.g., by checking if the name is not empty
       if (!readings[i].name.isEmpty())
       {
-        publishTemperature(mqClient, readings[i].value, readings[i].name);
+        MessagePublisher::publishTemperature(mqClient, readings[i].value, readings[i].name);
       }
     }
   }
 
-  delay(mainDelay.toInt()); // Wait for 5 seconds before next loop
+  if (acs712Enabled) {
+    float amps = fabs(readACS712Current());
+    logger.log(amps);
+    logger.log(" amps\n");
+
+    bool pumpState = (amps > 2.25);
+
+    if (pumpState) {
+        logger.log("Pump ON\n");
+    } else {
+        logger.log("Pump OFF\n");
+    }
+
+    if (firstRun || pumpState != lastPumpState || pumpState) {
+        // Only publish if the pump state changed ...i don't like hiding the visibility of being OFF, but too much data
+        MessagePublisher::publishPumpState(mqClient, pumpState, amps, "engineRoomPump");
+        lastPumpState = pumpState; // Update the last known state
+        firstRun = false;
+    }
+}
+
+
+logger.log("loop finished. sleep/delay...\n");
+// logger.flushTelnet();  
+  //  TelnetStream.println("loop finished. sleep/delay...");
+
+
+  // (1) Read-and-parse the configured delay (in ms)
+int requestedDelay = mainDelay.toInt();
+
+// (2) Enforce a minimum of 500 ms—if below, log + bump up to 3000 ms
+int actualDelay = requestedDelay < 500
+    ? 3000
+    : requestedDelay;
+if (requestedDelay < 500) {
+    logger.logf(
+      "Requested delay (%d ms) < 500 ms; overriding to %d ms\n",
+      requestedDelay, actualDelay
+    );
+}
+
+
+  delay(actualDelay); // Wait for 5 seconds before next loop
 }

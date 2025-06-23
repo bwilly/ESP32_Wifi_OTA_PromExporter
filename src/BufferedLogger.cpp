@@ -1,0 +1,82 @@
+// BufferedLogger.cpp
+#include "BufferedLogger.h"
+#include <stdarg.h>
+#include <Arduino.h>        // for Serial
+#include <string.h>         // for strlen()
+#include "TelnetBridge.h"   // for broadcastTelnet()
+
+// Define global instance
+BufferedLogger logger;
+
+void BufferedLogger::vlog(const char* fmt, va_list ap) {
+  char tmp[256];
+  vsnprintf(tmp, sizeof(tmp), fmt, ap);
+
+  // Always print to Serial
+  Serial.print(tmp);
+  // …and also to Telnet (if a client’s connected)
+  broadcastTelnet(tmp, strlen(tmp));
+
+  // Store in circular buffer
+  buf[head] = String(tmp);
+  head = (head + 1) % LOG_BUFFER_SIZE;
+  if (count < LOG_BUFFER_SIZE) {
+    ++count;
+  } else {
+    tail = (tail + 1) % LOG_BUFFER_SIZE;
+  }
+}
+
+void BufferedLogger::logf(const char* fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vlog(fmt, ap);
+  va_end(ap);
+}
+
+void BufferedLogger::log(const char* msg) {
+  // Always print to Serial
+  Serial.print(msg);
+  // …and also to Telnet
+  broadcastTelnet(msg, strlen(msg));
+
+  // Store in circular buffer
+  buf[head] = String(msg);
+  head = (head + 1) % LOG_BUFFER_SIZE;
+  if (count < LOG_BUFFER_SIZE) {
+    ++count;
+  } else {
+    tail = (tail + 1) % LOG_BUFFER_SIZE;
+  }
+}
+
+void BufferedLogger::log(const String& msg) {
+  log(msg.c_str());
+}
+
+void BufferedLogger::log(int val) {
+  char tmp[16];
+  itoa(val, tmp, 10);
+  log(tmp);
+}
+
+void BufferedLogger::log(unsigned long val) {
+  char tmp[16];
+  ultoa(val, tmp, 10);
+  log(tmp);
+}
+
+void BufferedLogger::log(float val) {
+  char tmp[32];
+  dtostrf(val, 0, 2, tmp);
+  log(tmp);
+}
+
+void BufferedLogger::dumpBufferTo(void (*sink)(const char*, size_t)) {
+  int idx = tail;
+  for (int i = 0; i < count; ++i) {
+    const char* msg = buf[idx].c_str();
+    sink(msg, strlen(msg));
+    idx = (idx + 1) % LOG_BUFFER_SIZE;
+  }
+}

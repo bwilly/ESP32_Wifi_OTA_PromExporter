@@ -3,6 +3,7 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include "shared_vars.h"
+#include <BufferedLogger.h>
 
 #define DHTTYPE DHT22 // DHT 22 (AM2302)
 
@@ -17,7 +18,7 @@ SemaphoreHandle_t xSensorDataMutex;
 float temperature = NAN;
 float humidity = NAN;
 
-// Function prototypes
+// Function prototypes [https://chatgpt.com/c/66f37120-74b4-800a-ba48-87c2fc3a22c0]
 void configDHT();
 float roundToHundredth(float number);
 void sensorTask(void *parameter);
@@ -29,13 +30,13 @@ void configDHT()
     if (pinDht != nullptr)
     {
         Serial.println("About to convert pin to int.");
-        int _pinDht = std::stoi(pinDht.c_str());
+        int _pinDht = std::stoi(pinDht.c_str()); // @pattern:toInt #1; todo: not sure if this the legacy way to get the vals. i think i have a pattern from the last 6mos that uses paramToVariableMap :bwilly Mar8'25
         dht = DHT(_pinDht, DHTTYPE); // Reinitialize the DHT object with the correct pin
         dht.begin();                 // Initialize the DHT sensor
     }
     else
     {
-        Serial.println("Cannot configure DHT because pin not defined.");
+        logger.log("Cannot configure DHT because pin not defined.\n");
     }
 }
 
@@ -48,7 +49,7 @@ void sensorTask(void *parameter)
 {
     if (pinDht == nullptr)
     {
-        Serial.println("DHT pin not configured in sensorTask!");
+        logger.log("DHT pin not configured in sensorTask!\n");
         vTaskDelete(NULL); // Delete the task if pin is not configured
         return;
     }
@@ -58,7 +59,7 @@ void sensorTask(void *parameter)
     for (;;)
     {
         // Wait a few seconds between measurements
-        vTaskDelay(pdMS_TO_TICKS(5000)); // 2 seconds
+        vTaskDelay(pdMS_TO_TICKS(5000)); // 5 seconds
 
         // Reading temperature and humidity
         float temp = dht.readTemperature();
@@ -67,7 +68,7 @@ void sensorTask(void *parameter)
         // Check if any reads failed and exit early (to try again).
         if (isnan(temp) || isnan(hum))
         {
-            Serial.println("Failed to read from DHT sensor!");
+            logger.log("Failed to read from DHT sensor! Inside a for(;;) with vTaskDelay(pdMS_TO_TICKS(5000)) \n");
             continue;
         }
 
@@ -75,11 +76,22 @@ void sensorTask(void *parameter)
         hum = roundToHundredth(hum);
 
         // Acquire the mutex before updating the shared variables
-        if (xSemaphoreTake(xSensorDataMutex, portMAX_DELAY) == pdTRUE)
+        if (xSensorDataMutex != NULL)
         {
-            temperature = temp;
-            humidity = hum;
-            xSemaphoreGive(xSensorDataMutex); // Release the mutex
+            if (xSemaphoreTake(xSensorDataMutex, portMAX_DELAY) == pdTRUE)
+            {
+                temperature = temp;
+                humidity = hum;
+                xSemaphoreGive(xSensorDataMutex); // Release the mutex
+            }
+            else
+            {
+                logger.log("Failed to take sensor mutex in sensorTask!\n");
+            }
+        }
+        else
+        {
+            logger.log("⚠️ sensor mutex not initialized in sensorTask!\n");
         }
     }
 }
@@ -90,7 +102,7 @@ void initSensorTask()
     xSensorDataMutex = xSemaphoreCreateMutex();
     if (xSensorDataMutex == NULL)
     {
-        Serial.println("Mutex creation failed!");
+        logger.log("Mutex creation failed!\n");
     }
 
     // Create the task pinned to core 1
@@ -106,7 +118,7 @@ void initSensorTask()
 
     if (sensorTaskHandle == NULL)
     {
-        Serial.println("Failed to create sensor task!");
+        logger.log("Failed to create sensor task!\n");
     }
 }
 
@@ -119,18 +131,25 @@ String floatToStringTwoDecimals(float value)
 
 float readDHTTemperature()
 {
-    Serial.println("readDHTTemperature...");
+    logger.log("readDHTTemperature...\n");
     float temp = NAN;
 
     // Acquire the mutex before accessing the shared variable
-    if (xSemaphoreTake(xSensorDataMutex, portMAX_DELAY) == pdTRUE)
+    if (xSensorDataMutex != NULL)
     {
-        temp = temperature;
-        xSemaphoreGive(xSensorDataMutex); // Release the mutex
+        if (xSemaphoreTake(xSensorDataMutex, portMAX_DELAY) == pdTRUE)
+        {
+            temp = temperature;
+            xSemaphoreGive(xSensorDataMutex); // Release the mutex
+        }
+        else
+        {
+            logger.log("Failed to obtain mutex for temperature!\n");
+        }
     }
     else
     {
-        Serial.println("Failed to obtain mutex for temperature!");
+        logger.log("⚠️ sensor mutex not initialized in readDHTTemperature!\n");
     }
 
     return temp;
@@ -138,18 +157,25 @@ float readDHTTemperature()
 
 float readDHTHumidity()
 {
-    Serial.println("readDHTHumidity...");
+    logger.log("readDHTHumidity...\n");
     float hum = NAN;
 
     // Acquire the mutex before accessing the shared variable
-    if (xSemaphoreTake(xSensorDataMutex, portMAX_DELAY) == pdTRUE)
+    if (xSensorDataMutex != NULL)
     {
-        hum = humidity;
-        xSemaphoreGive(xSensorDataMutex); // Release the mutex
+        if (xSemaphoreTake(xSensorDataMutex, portMAX_DELAY) == pdTRUE)
+        {
+            hum = humidity;
+            xSemaphoreGive(xSensorDataMutex); // Release the mutex
+        }
+        else
+        {
+            logger.log("Failed to obtain mutex for humidity!\n");
+        }
     }
     else
     {
-        Serial.println("Failed to obtain mutex for humidity!");
+        logger.log("⚠️ sensor mutex not initialized in readDHTHumidity!\n");
     }
 
     return hum;

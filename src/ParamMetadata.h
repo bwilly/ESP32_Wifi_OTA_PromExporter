@@ -13,6 +13,8 @@ struct ParamMetadata
     {
         STRING,
         NUMBER,
-        BOOLEAN
+        BOOLEAN,
+        HEX_ARRAY,
+        STRING_ARRAY
     } type;
 };

@@ -2,6 +2,8 @@
 #include "shared_vars.h"
 #include "SPIFFS.h"
 #include "ParamMetadata.h"
+#include <ArduinoJson.h>
+#include <sstream>
 
 String makePath(const char *param)
 {
@@ -73,7 +75,35 @@ void loadPersistedValues()
 //     mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
 // }
 
-void parseHexToArray(const String &value, uint8_t array[8])
+// void parseHexToArray(const String &value, uint8_t array[8])
+// {
+//     int startIndex = value.indexOf('{');
+//     int endIndex = value.indexOf('}');
+
+//     if (startIndex != -1 && endIndex != -1)
+//     {
+//         String subValue = value.substring(startIndex + 1, endIndex);
+
+//         int byteCount = 0;
+//         int commaIndex;
+//         while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
+//         {
+//             // String byteStr = subValue.substring(0, commaIndex).trim();
+//             String byteStr = subValue.substring(0, commaIndex);
+//             byteStr.trim();
+//             array[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+
+//             subValue = subValue.substring(commaIndex + 1);
+//             byteCount++;
+//         }
+//         if (byteCount < W1_NUM_BYTES)
+//         { // Process the last byte
+//             array[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+//         }
+//     }
+// }
+
+void parseHexToArray(const String &value, std::array<uint8_t, 8> intoArray)
 {
     int startIndex = value.indexOf('{');
     int endIndex = value.indexOf('}');
@@ -89,14 +119,14 @@ void parseHexToArray(const String &value, uint8_t array[8])
             // String byteStr = subValue.substring(0, commaIndex).trim();
             String byteStr = subValue.substring(0, commaIndex);
             byteStr.trim();
-            array[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+            intoArray[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
 
             subValue = subValue.substring(commaIndex + 1);
             byteCount++;
         }
         if (byteCount < W1_NUM_BYTES)
         { // Process the last byte
-            array[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+            intoArray[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
         }
     }
 }
@@ -122,14 +152,14 @@ String readFile(fs::FS &fs, const char *path)
     return fileContent;
 }
 
-void loadW1AddressFromFile(fs::FS &fs, const char *path, uint8_t entryIndex)
-{
-    String content = readFile(fs, path);
-    if (content.length() > 0)
-    {
-        parseHexToArray(content, w1Address[entryIndex]); // todo:refactor so w1Address is passed as an arg rather than be global
-    }
-}
+// void loadW1AddressFromFile(fs::FS &fs, const char *path, uint8_t entryIndex)
+// {
+//     String content = readFile(fs, path);
+//     if (content.length() > 0)
+//     {
+//         parseHexToArray(content, w1Address[entryIndex]); // todo:refactor so w1Address is passed as an arg rather than be global
+//     }
+// }
 
 // Write file to SPIFFS
 void writeFile(fs::FS &fs, const char *path, const char *message)
@@ -152,42 +182,130 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
     }
 }
 
-void parseAndStoreHex(const String &value, uint8_t index)
+void saveW1SensorConfigToFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sensors)
 {
-    int startIndex = value.indexOf('{');
-    int endIndex = value.indexOf('}');
-
-    if (startIndex != -1 && endIndex != -1)
+    Serial.println("Verifying HEX_ARRAY values before JSON serialization:");
+    for (const auto &sensor : w1Sensors.sensors)
     {
-        String subValue = value.substring(startIndex + 1, endIndex);
+        Serial.print((sensor.name + ": ").c_str());
 
-        int byteCount = 0;
-        int commaIndex;
-        while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
+        for (auto hex : sensor.HEX_ARRAY)
         {
-            // String byteStr = subValue.substring(0, commaIndex).trim();
-            String byteStr = subValue.substring(0, commaIndex);
-            byteStr.trim();
-
-            w1Address[index][byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
-
-            subValue = subValue.substring(commaIndex + 1);
-            byteCount++;
+            Serial.printf("0x%02X ", hex);
         }
-        if (byteCount < W1_NUM_BYTES)
-        { // Process the last byte
-            w1Address[index][byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
+        Serial.println();
+    }
+
+    // Create a JSON document
+    DynamicJsonDocument doc(2048);
+
+    // Create an array in the JSON document
+    JsonArray sensorsArray = doc.createNestedArray("sensors");
+
+    // Iterate over each sensor in w1Sensors and add it to the JSON array
+    for (const auto &sensor : w1Sensors.sensors) // todo: abstract out w1Sensors Nov10'24
+    {
+        JsonObject sensorObj = sensorsArray.createNestedObject();
+        sensorObj["name"] = sensor.name.c_str();
+
+        // Debug: Print sensor name
+        Serial.print("Processing sensor: ");
+        Serial.println(sensor.name.c_str());
+
+        // Create an array for the address
+        JsonArray addrArray = sensorObj.createNestedArray("addr");
+
+        // Iterate over each hex value in HEX_ARRAY and add it to JSON
+        for (const auto &hex : sensor.HEX_ARRAY)
+        {
+            // Format each byte as hex and add to JSON array
+            char hexStr[5];                                  // Buffer to hold "0xXX"
+            snprintf(hexStr, sizeof(hexStr), "0x%02X", hex); // Format each byte as hex
+            addrArray.add(hexStr);
+
+            // Debug: Print each hex value in source array
+            Serial.print("Adding hex value to JSON: ");
+            Serial.println(hexStr);
         }
     }
 
-    // Debug output
-    for (int i = 0; i < W1_NUM_BYTES; i++)
+    // Serialize JSON to a string
+    char jsonOutput[2048]; // todo:i bet i am running out of space (buffer overflow?)
+    serializeJson(doc, jsonOutput, sizeof(jsonOutput));
+
+    // Use writeFile to save the JSON string to the specified path
+    writeFile(fs, path, jsonOutput);
+
+    // Debug: Print the entire JSON output to verify final structure
+    Serial.println("Saved sensors to JSON file:");
+    Serial.println(jsonOutput);
+}
+
+
+uint8_t hexStringToByte(const char *hexString)
+{
+    unsigned int byte;
+    std::stringstream ss;
+    ss << std::hex << (hexString + 2); // Skip "0x" prefix
+    ss >> byte;
+    return static_cast<uint8_t>(byte);
+}
+
+void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, SensorGroupW1 &w1Sensors)
+{
+    File file = fs.open(path, "r");
+    if (!file)
     {
-        Serial.print("w1Address[");
-        Serial.print(index);
-        Serial.print("][");
-        Serial.print(i);
-        Serial.print("] = ");
-        Serial.println(w1Address[index][i], HEX);
+        Serial.println("Failed to open file for reading");
+        return;
+    }
+
+    DynamicJsonDocument doc(2048);
+
+    DeserializationError error = deserializeJson(doc, file);
+    if (error)
+    {
+        Serial.print("Failed to parse JSON: ");
+        Serial.println(error.c_str());
+        file.close();
+        return;
+    }
+
+    file.close();
+
+    JsonArray sensorsArray = doc["sensors"];
+    int i = 0;
+    for (JsonObject sensorObj : sensorsArray)
+    {
+        if (i >= w1Sensors.sensors.size())
+            break;
+
+        w1Sensors.sensors[i].name = sensorObj["name"].as<const char *>();
+
+        Serial.println("Hydrated name with: " + String(w1Sensors.sensors[i].name.c_str()));
+
+        int j = 0;
+        for (JsonVariant hexVal : sensorObj["addr"].as<JsonArray>())
+        {
+            if (j >= w1Sensors.sensors[i].HEX_ARRAY.size())
+                break;
+            w1Sensors.sensors[i].HEX_ARRAY[j] = hexStringToByte(hexVal.as<const char *>());
+            j++;
+        }
+        i++;
+    }
+
+    Serial.println("Loaded sensors from JSON:");
+    for (const auto &sensor : w1Sensors.sensors)
+    {
+        Serial.print("Name: ");
+        Serial.println(sensor.name.c_str());
+        Serial.print("Address: ");
+        for (const auto &hex : sensor.HEX_ARRAY)
+        {
+            Serial.print(hex);
+            Serial.print(" ");
+        }
+        Serial.println();
     }
 }
