@@ -43,24 +43,35 @@ void MessagePublisher::publishTemperature(PubSubClient &client, float temperatur
 }
 
 void MessagePublisher::publishHumidity(PubSubClient &client, float humidity, const String &location) {
-    const size_t capacity = JSON_ARRAY_SIZE(2) + 2 * JSON_OBJECT_SIZE(4);
+    // Same style/capacity as temperature
+    const size_t capacity = JSON_OBJECT_SIZE(10);
     DynamicJsonDocument doc(capacity);
 
-    JsonObject j = doc.createNestedObject();
-    j["bn"] = location;
-    j["n"] = "humidity";
-    j["u"] = "%";
-    j["v"] = humidity;
-    j["ut"] = (int)time(nullptr);
+    doc["bn"] = location;
+    doc["n"]  = "humidity";
+    doc["u"]  = "%";
+    doc["v"]  = humidity;
+    doc["ut"] = (int)time(nullptr);
 
-    char buffer[256];
+    char buffer[512];
     serializeJson(doc, buffer);
 
     Serial.print("Publishing the following to msg broker: ");
     Serial.println(buffer);
 
-    client.publish(HUMIDITY_TOPIC, buffer);
+    if (!client.connected()) {
+        logger.log("MQTT client disconnected before publish!");
+        // you might want to return here, but I’ll leave behavior same as temp()
+    }
+
+    bool ok = client.publish(HUMIDITY_TOPIC, buffer);
+    if (ok) {
+        logger.log("Humidity msg pub ok \n");
+    } else {
+        logger.log("Humidity msg pub FAIL \n");
+    }
 }
+
 
 // void MessagePublisher::publishPumpState(PubSubClient &client, bool isOn, const String &location) {
 //     const size_t capacity = JSON_OBJECT_SIZE(10);
