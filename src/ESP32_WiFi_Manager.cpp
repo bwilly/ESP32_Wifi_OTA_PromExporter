@@ -68,12 +68,11 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "Config.h"
 #include "MessagePublisher.h"
 
-
 #include "version.h"
 // #include <TelnetStream.h>
 
 #include <AsyncTelnetSerial.h>
-#include <AsyncTCP.h>              // dependency for the async streams
+#include <AsyncTCP.h> // dependency for the async streams
 
 #include <BufferedLogger.h>
 #include "TelnetBridge.h"
@@ -87,7 +86,6 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define SERVICE_PROTOCOL "tcp"
 #define SERVICE_PORT 80
 // #define LOCATION "SandBBedroom"
-
 
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
@@ -177,11 +175,8 @@ const long interval = 40000; // interval to wait for Wi-Fi connection (milliseco
 unsigned long previous_time = 0;
 unsigned long reconnect_delay = 180000; // 3-min delay
 
-
-
 static bool lastPumpState = false; // Assume OFF at startup
 static bool firstRun = true;       // New flag to force first publish
-
 
 // Set LED GPIO
 const int ledPin = 2;
@@ -562,8 +557,6 @@ void setup()
 {
   // Serial port for debugging purposes
   Serial.begin(115200);
-  
-  
 
   // Enable verbose logging for the WiFi component
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
@@ -589,7 +582,7 @@ void setup()
 
   // Load parameters from SPIFFS using paramList
   // replaces commented out code directly above
-  for (const auto &paramMetadata : paramList) 
+  for (const auto &paramMetadata : paramList)
   {
     if (paramMetadata.name.startsWith("w1-"))
     {
@@ -616,31 +609,30 @@ void setup()
   {
     initSensorTask(); // dht
   }
-  if (acs712Enabled){
+  if (acs712Enabled)
+  {
     setupACS712();
   }
 
   // setup: path1
   if (initWiFi())
   { // Station Mode
-    
+
     // Start Telnet stream
     // TelnetStream.begin();            // start Telnet server on port 23
-    // initTelnet();  
-
+    // initTelnet();
 
     // (B) Start async Telnet-to-Serial forwarding:
     //     - 115200 is the baudrate to mirror (must match Serial.begin)
     //     - true  = link Telnet <-> Serial
     //     - false = don’t publish mDNS name
-    
+
     // telnetSerial.begin(115200, true, false);
-    
+
     // start our async Telnet server
-  initTelnetServer();
+    initTelnetServer();
     logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
 
-    
     logger.log("initDNS...\n");
     initDNS();
 
@@ -789,7 +781,6 @@ void setup()
       logger.log("Error setting MQTT from params.\n");
     }
     logger.log("\nEntry setup loop complete.");
-    
   }
   else
   // SETUP : Path2
@@ -797,10 +788,37 @@ void setup()
 
     apStartTime = millis(); // Record the start time in AP mode
 
-    // Connect to Wi-Fi network with SSID and password
+
     Serial.println("Setting AP (Access Point)");
-    // NULL sets an open Access Point
-    WiFi.softAP("srlESP-WIFI-MANAGER", "saltmeadow"); // name and password
+
+    // Build base SSID (without prefix)
+    String base;
+
+    if (locationName.length() > 0) {
+      // Use configured location name
+      base = locationName;
+    } else {
+      // Build fallback with unique suffix from MAC
+      uint64_t mac = ESP.getEfuseMac();
+      uint32_t suffix = (uint32_t)(mac & 0xFFFFFF);  // last 3 bytes
+
+      char buf[32];
+      snprintf(buf, sizeof(buf), "%06X", suffix);
+      base = buf;
+    }
+
+    // Final SSID: ALWAYS prefixed with "sesp-"
+    String apSsid = "srl-sesp-" + base;
+
+    // Guarantee SSID ≤ 31 chars (Wi-Fi limit)
+    if (apSsid.length() > 31) {
+      apSsid = apSsid.substring(0, 31);
+    }
+
+    WiFi.softAP(apSsid.c_str(), "saltmeadow");
+
+    Serial.print("AP SSID: ");
+    Serial.println(apSsid);
 
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
@@ -1057,47 +1075,49 @@ void loop()
     }
   }
 
-  if (acs712Enabled) {
+  if (acs712Enabled)
+  {
     float amps = fabs(readACS712Current());
     logger.log(amps);
     logger.log(" amps\n");
 
     bool pumpState = (amps > 2.25);
 
-    if (pumpState) {
-        logger.log("Pump ON\n");
-    } else {
-        logger.log("Pump OFF\n");
+    if (pumpState)
+    {
+      logger.log("Pump ON\n");
+    }
+    else
+    {
+      logger.log("Pump OFF\n");
     }
 
-    if (firstRun || pumpState != lastPumpState || pumpState) {
-        // Only publish if the pump state changed ...i don't like hiding the visibility of being OFF, but too much data
-        MessagePublisher::publishPumpState(mqClient, pumpState, amps, "engineRoomPump");
-        lastPumpState = pumpState; // Update the last known state
-        firstRun = false;
+    if (firstRun || pumpState != lastPumpState || pumpState)
+    {
+      // Only publish if the pump state changed ...i don't like hiding the visibility of being OFF, but too much data
+      MessagePublisher::publishPumpState(mqClient, pumpState, amps, "engineRoomPump");
+      lastPumpState = pumpState; // Update the last known state
+      firstRun = false;
     }
-}
+  }
 
-
-logger.log("loop finished. sleep/delay...\n");
-// logger.flushTelnet();  
+  logger.log("loop finished. sleep/delay...\n");
+  // logger.flushTelnet();
   //  TelnetStream.println("loop finished. sleep/delay...");
 
-
   // (1) Read-and-parse the configured delay (in ms)
-int requestedDelay = mainDelay.toInt();
+  int requestedDelay = mainDelay.toInt();
 
-// (2) Enforce a minimum of 500 ms—if below, log + bump up to 3000 ms
-int actualDelay = requestedDelay < 500
-    ? 3000
-    : requestedDelay;
-if (requestedDelay < 500) {
+  // (2) Enforce a minimum of 500 ms—if below, log + bump up to 3000 ms
+  int actualDelay = requestedDelay < 500
+                        ? 3000
+                        : requestedDelay;
+  if (requestedDelay < 500)
+  {
     logger.logf(
-      "Requested delay (%d ms) < 500 ms; overriding to %d ms\n",
-      requestedDelay, actualDelay
-    );
-}
-
+        "Requested delay (%d ms) < 500 ms; overriding to %d ms\n",
+        requestedDelay, actualDelay);
+  }
 
   delay(actualDelay); // Wait for 5 seconds before next loop
 }
