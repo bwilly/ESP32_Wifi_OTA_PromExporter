@@ -71,7 +71,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "version.h"
 // #include <TelnetStream.h>
 
-#include <AsyncTelnetSerial.h>
+// #include <AsyncTelnetSerial.h>
 #include <AsyncTCP.h> // dependency for the async streams
 
 #include <BufferedLogger.h>
@@ -90,7 +90,14 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 
-const std::string version = std::string(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: TelnetBridge";
+
+// BEFORE (something like this)
+// const char* version = APP_VERSION "::" APP_COMMIT_HASH ":: TelnetBridge";
+
+// AFTER
+String version = String(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: TelnetBridge";
+
+
 // trying to identify cause of unreliable dht22 readings
 
 // Serial.println("Application Version: " APP_VERSION);
@@ -226,7 +233,7 @@ void handleZabbixPing(AsyncWebServerRequest *request)
 // Function to handle Zabbix agent.version
 void handleZabbixVersion(AsyncWebServerRequest *request)
 {
-  request->send(200, "text/plain", version.c_str());
+  request->send(200, "text/plain", version);
 }
 
 // Function to handle system.uptime
@@ -680,7 +687,7 @@ void setup()
               { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
     server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", version.c_str()); });
+              { request->send(200, "text/html", version); });
 
     server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", pinDht); });
