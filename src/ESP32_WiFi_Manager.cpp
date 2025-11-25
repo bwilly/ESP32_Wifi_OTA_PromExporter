@@ -32,6 +32,13 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
   The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 *********/
 
+
+
+// todo Nov25'25
+// why is volt-test trying to send dht?
+// readDHTTemperature...
+// ⚠️ sensor mutex not initialized in readDHTTemperature!
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
@@ -95,7 +102,11 @@ unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 // const char* version = APP_VERSION "::" APP_COMMIT_HASH ":: TelnetBridge";
 
 // AFTER
-String version = String(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: TelnetBridge";
+// String version = String(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: TelnetBridge-removed";
+String version = String(APP_VERSION) + "::" +
+                 APP_COMMIT_HASH + "::" +
+                 APP_BUILD_DATE + ":: TelnetBridge-removed";
+
 
 
 // trying to identify cause of unreliable dht22 readings

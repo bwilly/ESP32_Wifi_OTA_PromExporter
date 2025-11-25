@@ -1,0 +1,9 @@
+#pragma once
+
+// Template version header.
+// This file is NOT used at runtime if update_version.py runs.
+// update_version.py generates src/version.h with real git info and build date.
+
+#define APP_VERSION     "0.0.0-dev"
+#define APP_COMMIT_HASH "local"
+#define APP_BUILD_DATE  "1970-01-01T00:00:00Z"
