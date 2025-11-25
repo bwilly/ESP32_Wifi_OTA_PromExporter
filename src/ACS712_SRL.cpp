@@ -26,26 +26,11 @@ void ACS712Sensor::begin() {
 // Helper function to read DC current
 float ACS712Sensor::readCurrentDC() {
     // Read raw ADC value
-    int rawValue = analogRead(_pinAcs);
-    
+    int rawValue = analogRead(_pinAcs);    
 
-    // // Convert raw ADC value to voltage
-    // float voltage = (rawValue * ADC_MAX_VOLTAGE) / ADC_RESOLUTION;
-    // Serial.print("Voltage: ");
-    // Serial.println(voltage);
-
-    // // Calculate current (in Amps)
-    // float current = (voltage - SENSOR_OFFSET) / (MV_PER_AMP / 1000.0);
-
-    // return current; // Current in Amps
-
-
-
-     float Vdiv = rawValue * ADC_MAX_VOLTAGE / ADC_RESOLUTION;
-    // Serial.print("Vdiv: "); Serial.println(Vdiv);
-
-    // undo divider + scale from offset:
+    float Vdiv = rawValue * ADC_MAX_VOLTAGE / ADC_RESOLUTION;
     float amps = (Vdiv - ADC_ZERO_VOLT) / ADC_SENSITIVITY;
+
     return amps;
 }
 
