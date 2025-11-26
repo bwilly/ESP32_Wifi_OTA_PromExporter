@@ -135,6 +135,11 @@ float previousHumidity = NAN;
 unsigned long lastPublishTime_tempt = 0;
 unsigned long lastPublishTime_humidity = 0;
 
+// Local pump config (Nov 25, 2025)
+namespace {
+    constexpr float PUMP_ON_THRESHOLD_AMPS = 0.99f;   // was hardcoded in loop
+}
+
 // Globals to store the last published values
 // float lastPublishedTemperature = NAN;
 // float lastPublishedHumidity = NAN;
@@ -1099,7 +1104,7 @@ void loop()
     logger.log(amps);
     logger.log(" amps\n");
 
-    bool pumpState = (amps > 2.25);
+    bool pumpState = (amps > PUMP_ON_THRESHOLD_AMPS);
 
     if (pumpState)
     {
