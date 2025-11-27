@@ -74,6 +74,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "TemperatureSensor.h"
 #include "Config.h"
 #include "MessagePublisher.h"
+#include "ConfigDump.h"
 
 #include "version.h"
 // #include <TelnetStream.h>
@@ -743,7 +744,15 @@ void setup()
 
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
-    // server.serveStatic("/", SPIFFS, "/");
+    
+    // Example if you’re using AsyncWebServer:
+    server.on("/exportConfig", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String json = buildConfigJsonFlat();
+        request->send(200, "application/json", json);
+    });
+
+    
+                // server.serveStatic("/", SPIFFS, "/");
 
     // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
     server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
