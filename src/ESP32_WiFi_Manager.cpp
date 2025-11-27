@@ -137,7 +137,7 @@ unsigned long lastPublishTime_humidity = 0;
 
 // Local pump config (Nov 25, 2025)
 namespace {
-    constexpr float PUMP_ON_THRESHOLD_AMPS = 1.1f;   // was hardcoded in loop
+    constexpr float PUMP_ON_THRESHOLD_AMPS = 1.75f;   // was hardcoded in loop
 }
 
 // Globals to store the last published values
