@@ -24,15 +24,33 @@ void ACS712Sensor::begin() {
 }
 
 // Helper function to read DC current
+// float ACS712Sensor::readCurrentDC() {
+//     // Read raw ADC value
+//     int rawValue = analogRead(_pinAcs);    
+
+//     float Vdiv = rawValue * ADC_MAX_VOLTAGE / ADC_RESOLUTION;
+//     float amps = (Vdiv - ADC_ZERO_VOLT) / ADC_SENSITIVITY;
+
+//     return amps;
+// }
+
 float ACS712Sensor::readCurrentDC() {
-    // Read raw ADC value
-    int rawValue = analogRead(_pinAcs);    
+    float sumAmps = 0.0f;
 
-    float Vdiv = rawValue * ADC_MAX_VOLTAGE / ADC_RESOLUTION;
-    float amps = (Vdiv - ADC_ZERO_VOLT) / ADC_SENSITIVITY;
+    for (int i = 0; i < NUM_SAMPLES; ++i) {
+        int rawValue = analogRead(_pinAcs);
+        float Vdiv = rawValue * ADC_MAX_VOLTAGE / ADC_RESOLUTION;
+        float amps = (Vdiv - ADC_ZERO_VOLT) / ADC_SENSITIVITY;
+        sumAmps += amps;
 
-    return amps;
+        // optional: smooth out ADC sampling timing
+        // delayMicroseconds(200);
+    }
+
+    float avgAmps = sumAmps / NUM_SAMPLES;
+    return avgAmps;
 }
+
 
 void ACS712Sensor::serialOutInfo() {
     // Read and print current

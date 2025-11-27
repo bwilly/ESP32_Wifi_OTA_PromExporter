@@ -52,6 +52,8 @@ private:
         (MV_PER_AMP / 1000.0f) * DIV_RATIO * CAL_GAIN;
     // ~0.0641 V/A
 
+    static constexpr int   NUM_SAMPLES     = 16;  // number of samples for averaging
+
 
 
     
