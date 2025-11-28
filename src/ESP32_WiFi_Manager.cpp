@@ -45,6 +45,9 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include <AsyncTCP.h>
 #include "SPIFFS.h"
 
+#include "ConfigLoad.h"
+#include "ConfigFetch.h"
+
 #include "esp_log.h"
 #include <WiFiMulti.h>
 #include "ESPmDNS.h"
@@ -301,6 +304,33 @@ void handleWiFiSignalStrength(AsyncWebServerRequest *request)
   const char *rssiCharArray = rssiString.c_str();
   request->send(200, "text/plain", rssiCharArray);
 }
+
+void tryFetchAndApplyRemoteConfig()
+{
+    const String url = "http://salt-r420:9080/esp-config/salt/stove.json";
+
+    String json;
+    if (!downloadConfigJson(url, json))
+    {
+        logger.log("ConfigFetch: failed to download remote config");
+        return;
+    }
+
+    logger.log("ConfigFetch: downloaded " + String(json.length()) + " bytes");
+
+    if (!loadConfigFromJsonString(json))
+    {
+        logger.log("ConfigFetch: JSON parse/apply failed");
+        return;
+    }
+
+    logger.log("ConfigFetch: JSON applied OK");
+
+    // optional later:
+    // saveConfigBackupToFile("/config.json");
+    // ESP.restart();
+}
+
 
 // Function to initialize the Zabbix agent server
 void initZabbixServer()
@@ -588,6 +618,19 @@ void setup()
   Serial.println("initSpiffs...");
   initSPIFFS();
 
+  // Try to load a flat JSON config from /config.json.
+  // If present and valid, it will override the legacy per-param SPIFFS values
+  // that loadPersistedValues() just populated.
+  if (loadConfigFromJsonFile("/config.json"))
+  {
+    Serial.println("ConfigLoad: /config.json loaded and applied (overrides per-param SPIFFS files).");
+  }
+  else
+  {
+    Serial.println("ConfigLoad: no /config.json (or parse error); using values from loadPersistedValues().");
+  }
+
+
   // i am commenting out below b/c i don't believe it has purpose (bwilly)
   // Set GPIO 2 as an OUTPUT
   // Serial.println("ledPin mode and digitalWrite...");
@@ -627,21 +670,17 @@ void setup()
   // Serial.println(ip);
   // Serial.println(gateway);
 
-  // @pattern
-  bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
-  if (dhtEnabledValue)
-  {
-    initSensorTask(); // dht
-  }
-  if (acs712Enabled)
-  {
-    setupACS712();
-  }
+  
 
   // setup: path1
   if (initWiFi())
   { // Station Mode
 
+    
+    tryFetchAndApplyRemoteConfig();
+    
+
+    
     // Start Telnet stream
     // TelnetStream.begin();            // start Telnet server on port 23
     // initTelnet();
@@ -662,6 +701,17 @@ void setup()
 
     // Initialize Zabbix agent server
     initZabbixServer();
+
+    // @pattern
+    bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
+    if (dhtEnabledValue)
+    {
+      initSensorTask(); // dht
+    }
+    if (acs712Enabled)
+    {
+      setupACS712();
+    }
 
     logger.log("set web root /index.html...\n");
     // Route for root / web page
@@ -745,8 +795,7 @@ void setup()
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
     
-    // Example if you’re using AsyncWebServer:
-    server.on("/exportConfig", HTTP_GET, [](AsyncWebServerRequest *request) {
+    server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request) {
         String json = buildConfigJsonFlat();
         request->send(200, "application/json", json);
     });
