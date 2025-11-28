@@ -1,6 +1,8 @@
 // ConfigLoad.cpp
 #include "ConfigLoad.h"
 
+#include <BufferedLogger.h>
+
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 
@@ -59,12 +61,22 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
         const String &key   = entry.first;
         String       *value = entry.second;
 
-        if (!value) continue;
-        if (!doc.containsKey(key)) continue;
+        if (!value) {
+            logger.log("ConfigLoad: string param '" + key + "' has null target pointer");
+            continue;
+        }
+
+        if (!doc.containsKey(key)) {
+            logger.log("ConfigLoad: string param '" + key + "' not present in JSON");
+            continue;
+        }
 
         // Accept JSON string, number, or bool and stringify it
         JsonVariant v = doc[key];
-        if (v.isNull()) continue;
+        if (v.isNull()) {
+            logger.log("ConfigLoad: string param '" + key + "' present but null");
+            continue;
+        }
 
         if (v.is<const char*>()) {
             *value = String(v.as<const char*>());
@@ -78,6 +90,8 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
             serializeJson(v, tmp);
             *value = tmp;
         }
+
+        logger.log("ConfigLoad: applied string param '" + key + "' = '" + *value + "'");
     }
 
     // 2) Bool params (enableW1, enableDHT, enableAcs712, enableMQTT, etc.)
@@ -85,21 +99,38 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
         const String &key   = entry.first;
         bool         *value = entry.second;
 
-        if (!value) continue;
-        if (!doc.containsKey(key)) continue;
+        if (!value) {
+            logger.log("ConfigLoad: bool param '" + key + "' has null target pointer");
+            continue;
+        }
+
+        if (!doc.containsKey(key)) {
+            logger.log("ConfigLoad: bool param '" + key + "' not present in JSON");
+            continue;
+        }
 
         JsonVariant v = doc[key];
-        if (v.isNull()) continue;
+        if (v.isNull()) {
+            logger.log("ConfigLoad: bool param '" + key + "' present but null");
+            continue;
+        }
+
+        bool result = *value;  // default to existing
 
         if (v.is<bool>()) {
-            *value = v.as<bool>();
+            result = v.as<bool>();
         } else if (v.is<long>() || v.is<double>()) {
-            *value = (v.as<long>() != 0);
+            result = (v.as<long>() != 0);
         } else if (v.is<const char*>()) {
             String s = v.as<const char*>();
             s.toLowerCase();
-            *value = (s == "1" || s == "true" || s == "yes" || s == "on");
+            result = (s == "1" || s == "true" || s == "yes" || s == "on");
+        } else {
+            logger.log("ConfigLoad: bool param '" + key + "' has unsupported JSON type; leaving existing value");
         }
+
+        *value = result;
+        logger.log("ConfigLoad: applied bool param '" + key + "' = " + String(*value ? "true" : "false"));
     }
 
     // 3) W1 sensors from w1-1 / w1-1-name ... w1-6
@@ -109,14 +140,21 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
 
         // Address
         if (doc.containsKey(hexKey)) {
-            String hexStr = doc[hexKey].as<const char*>();
+            const char *hexCStr = doc[hexKey].as<const char*>();
+            String hexStr = hexCStr ? String(hexCStr) : String();
+
             if (!hexStr.isEmpty()) {
                 bool ok = hexStringToBytes(hexStr, w1Address[i], W1_NUM_BYTES);
                 if (!ok) {
-                    Serial.print(F("ConfigLoad: invalid hex for "));
-                    Serial.println(hexKey);
+                    logger.log("ConfigLoad: invalid hex for '" + hexKey + "' = '" + hexStr + "'");
+                } else {
+                    logger.log("ConfigLoad: applied W1 address '" + hexKey + "' = '" + hexStr + "'");
                 }
+            } else {
+                logger.log("ConfigLoad: W1 address key '" + hexKey + "' present but empty");
             }
+        } else {
+            logger.log("ConfigLoad: W1 address key '" + hexKey + "' not present in JSON");
         }
 
         // Name
@@ -124,7 +162,12 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
             const char *nm = doc[nameKey].as<const char*>();
             if (nm) {
                 w1Name[i] = String(nm);
+                logger.log("ConfigLoad: applied W1 name '" + nameKey + "' = '" + w1Name[i] + "'");
+            } else {
+                logger.log("ConfigLoad: W1 name key '" + nameKey + "' present but null");
             }
+        } else {
+            logger.log("ConfigLoad: W1 name key '" + nameKey + "' not present in JSON");
         }
     }
 
