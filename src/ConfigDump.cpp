@@ -1,19 +1,19 @@
 // ConfigDump.cpp
 #include "ConfigDump.h"
 
-#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 
 #include "shared_vars.h"
 
-// You can tweak this later if you add more params
+// Keep in sync with ConfigLoad.cpp
 static const size_t CONFIG_JSON_CAPACITY = 4096;
 
 // Helper: convert raw bytes to uppercase hex string, e.g. "28FF3C1234567890"
 static String bytesToHexString(const uint8_t *data, size_t len)
 {
-    char buf[2 * 8 + 1];  // W1_NUM_BYTES is 8; keep simple and fixed
+    // W1_NUM_BYTES comes from shared_vars.h; this buffer is big enough for it.
+    char buf[2 * W1_NUM_BYTES + 1];
     size_t outLen = len * 2;
 
     if (outLen > sizeof(buf) - 1) {
@@ -28,38 +28,44 @@ static String bytesToHexString(const uint8_t *data, size_t len)
     return String(buf);
 }
 
-// Build a flat JSON doc from the *current in-memory values*
-// (paramToVariableMap, paramToBoolMap, w1Address, w1Name)
+// Build a flat JSON doc from the current in-memory values:
+// - String params via paramToVariableMap
+// - Bool params via paramToBoolMap
+// - W1 sensor addresses/names via w1Address[] and w1Name[]
 String buildConfigJsonFlat()
 {
     StaticJsonDocument<CONFIG_JSON_CAPACITY> doc;
 
-    // 1) All String params (ssid, pass, location, pinDht, mqtt-server, etc.)
+    // 1) All String params (ssid, pass, locationName, pins, mqtt-server, etc.)
     for (auto &entry : paramToVariableMap) {
         const String &key   = entry.first;
         String       *value = entry.second;
 
-        if (value != nullptr) {
-            doc[key] = *value;
+        if (!value) {
+            continue;
         }
+
+        doc[key] = *value;
     }
 
-    // 2) All bool params (enableW1, enableDHT, enableAcs712, enableMQTT)
+    // 2) All bool params (enableW1, enableDHT, enableAcs712, enableMQTT, etc.)
     for (auto &entry : paramToBoolMap) {
         const String &key   = entry.first;
         bool         *value = entry.second;
 
-        if (value != nullptr) {
-            doc[key] = *value;
+        if (!value) {
+            continue;
         }
+
+        doc[key] = *value;
     }
 
-    // 3) W1 sensor hex + names → legacy flat keys: w1-1, w1-1-name, ... w1-6
+    // 3) W1 sensor hex + names → flat keys: w1-1, w1-1-name, ... w1-6, w1-6-name
     for (int i = 0; i < 6; ++i) {
         String hexKey  = "w1-" + String(i + 1);
         String nameKey = hexKey + "-name";
 
-        bool hasName = w1Name[i].length() > 0;
+        bool hasName = (w1Name[i].length() > 0);
         bool hasAddr = false;
 
         for (int b = 0; b < W1_NUM_BYTES; ++b) {
@@ -79,28 +85,43 @@ String buildConfigJsonFlat()
     }
 
     String out;
-    serializeJsonPretty(doc, out);  // pretty for human export
+    serializeJsonPretty(doc, out);   // pretty for human-readable export
     return out;
 }
 
-// Optional: write a backup file into SPIFFS, e.g. "/config-backup.json"
-bool saveConfigBackupToFile(const char *path = "/config-backup.json")
+// Save the current in-memory config JSON to a file in SPIFFS.
+// Default path is "/config-backup.json".
+bool saveConfigBackupToFile(const char *path)
 {
     String json = buildConfigJsonFlat();
 
-    if (!SPIFFS.begin(true)) {
-        Serial.println(F("saveConfigBackupToFile: SPIFFS.begin() failed"));
-        return false;
-    }
-
     File f = SPIFFS.open(path, FILE_WRITE);  // truncates or creates
     if (!f) {
-        Serial.println(F("saveConfigBackupToFile: open failed"));
+        Serial.print(F("ConfigDump: failed to open "));
+        Serial.print(path);
+        Serial.println(F(" for writing"));
         return false;
     }
 
     size_t written = f.print(json);
     f.close();
 
-    return written == json.length();
+    if (written != json.length()) {
+        Serial.print(F("ConfigDump: short write to "));
+        Serial.print(path);
+        Serial.print(F(" (expected "));
+        Serial.print(json.length());
+        Serial.print(F(" bytes, wrote "));
+        Serial.print(written);
+        Serial.println(F(")"));
+        return false;
+    }
+
+    return true;
+}
+
+// Convenience wrapper for saving the "main" config to /config.json
+bool saveCurrentConfigToMainFile(const char *path)
+{
+    return saveConfigBackupToFile(path);
 }

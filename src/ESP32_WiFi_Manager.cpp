@@ -310,6 +310,9 @@ void handleWiFiSignalStrength(AsyncWebServerRequest *request)
 
 void tryFetchAndApplyRemoteConfig()
 {
+    // Take a snapshot of current effective config (legacy + any /config.json already loaded)
+    String beforeJson = buildConfigJsonFlat();
+
     // configUrl is now the *base* site URL, e.g.
     // "http://salt-r420:9080/esp-config/salt"
     const String baseUrl = configUrl;
@@ -371,6 +374,25 @@ void tryFetchAndApplyRemoteConfig()
     if (instanceUrl.length() == 0)
     {
         // No instance URL → we’re done; device runs with GLOBAL (and legacy) only
+        // Now decide whether GLOBAL changed anything
+        String afterJson = buildConfigJsonFlat();
+
+        if (afterJson == beforeJson)
+        {
+            logger.log("ConfigFetch: no config changes detected (GLOBAL-only case); no reboot\n");
+            return;
+        }
+
+        if (saveConfigBackupToFile("/config.json"))
+        {
+            logger.log("ConfigFetch: persisted merged config to /config.json (GLOBAL-only change); rebooting\n");
+        }
+        else
+        {
+            logger.log("ConfigFetch: FAILED to persist merged config to /config.json (GLOBAL-only change); rebooting anyway\n");
+        }
+
+        ESP.restart();
         return;
     }
 
@@ -378,6 +400,26 @@ void tryFetchAndApplyRemoteConfig()
     {
         logger.log("ConfigFetch: INSTANCE config fetch FAILED from " +
                    instanceUrl + " (using GLOBAL-only values if any)\n");
+
+        // Even if instance failed, GLOBAL might have changed; check diff
+        String afterJson = buildConfigJsonFlat();
+
+        if (afterJson == beforeJson)
+        {
+            logger.log("ConfigFetch: no config changes detected after failed INSTANCE fetch; no reboot\n");
+            return;
+        }
+
+        if (saveConfigBackupToFile("/config.json"))
+        {
+            logger.log("ConfigFetch: persisted merged config to /config.json (GLOBAL-only change with failed INSTANCE); rebooting\n");
+        }
+        else
+        {
+            logger.log("ConfigFetch: FAILED to persist merged config to /config.json (GLOBAL-only change with failed INSTANCE); rebooting anyway\n");
+        }
+
+        ESP.restart();
         return;
     }
 
@@ -387,14 +429,50 @@ void tryFetchAndApplyRemoteConfig()
     if (!loadConfigFromJsonString(json))
     {
         logger.log("ConfigFetch: INSTANCE JSON parse/apply FAILED\n");
+
+        // INSTANCE parse failed; GLOBAL may still have changed
+        String afterJson = buildConfigJsonFlat();
+
+        if (afterJson == beforeJson)
+        {
+            logger.log("ConfigFetch: no config changes detected after INSTANCE parse failure; no reboot\n");
+            return;
+        }
+
+        if (saveConfigBackupToFile("/config.json"))
+        {
+            logger.log("ConfigFetch: persisted merged config to /config.json (GLOBAL-only change, INSTANCE parse fail); rebooting\n");
+        }
+        else
+        {
+            logger.log("ConfigFetch: FAILED to persist merged config to /config.json (GLOBAL-only change, INSTANCE parse fail); rebooting anyway\n");
+        }
+
+        ESP.restart();
         return;
     }
 
     logger.log("ConfigFetch: INSTANCE JSON applied OK (overrides GLOBAL where present)\n");
 
-    // optional later:
-    // saveConfigBackupToFile("/config.json");
-    // ESP.restart();
+    // 3) Now compare full, merged config before vs after to decide on persist + reboot
+    String afterJson = buildConfigJsonFlat();
+
+    if (afterJson == beforeJson)
+    {
+        logger.log("ConfigFetch: no config changes detected after GLOBAL+INSTANCE; no reboot\n");
+        return;
+    }
+
+    if (saveConfigBackupToFile("/config.json"))
+    {
+        logger.log("ConfigFetch: persisted merged config to /config.json; rebooting\n");
+    }
+    else
+    {
+        logger.log("ConfigFetch: FAILED to persist merged config to /config.json; rebooting anyway to pick up in-memory changes\n");
+    }
+
+    ESP.restart();
 }
 
 
@@ -860,11 +938,24 @@ void setup()
 
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
-    
+    // i believe this is the in-mem representation
     server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request) {
         String json = buildConfigJsonFlat();
         request->send(200, "application/json", json);
     });
+    // View the locally stored working config: /config.json
+    server.on("/config/local", HTTP_GET, [](AsyncWebServerRequest *request) {
+        const char *path = "/config.json";
+
+        if (!SPIFFS.exists(path)) {
+            request->send(404, "text/plain", "No /config.json stored");
+            return;
+        }
+
+        // Stream directly from SPIFFS without loading the whole file into RAM
+        request->send(SPIFFS, path, "application/json");
+    });
+
 
     
                 // server.serveStatic("/", SPIFFS, "/");
