@@ -62,19 +62,19 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
         String       *value = entry.second;
 
         if (!value) {
-            logger.log("ConfigLoad: string param '" + key + "' has null target pointer");
+            logger.log("ConfigLoad: string param '" + key + "' has null target pointer\n");
             continue;
         }
 
         if (!doc.containsKey(key)) {
-            logger.log("ConfigLoad: string param '" + key + "' not present in JSON");
+            logger.log("ConfigLoad: string param '" + key + "' not present in JSON\n");
             continue;
         }
 
         // Accept JSON string, number, or bool and stringify it
         JsonVariant v = doc[key];
         if (v.isNull()) {
-            logger.log("ConfigLoad: string param '" + key + "' present but null");
+            logger.log("ConfigLoad: string param '" + key + "' present but null\n");
             continue;
         }
 
@@ -91,7 +91,7 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
             *value = tmp;
         }
 
-        logger.log("ConfigLoad: applied string param '" + key + "' = '" + *value + "'");
+        logger.log("ConfigLoad: applied string param '" + key + "' = '" + *value + "'\n");
     }
 
     // 2) Bool params (enableW1, enableDHT, enableAcs712, enableMQTT, etc.)
@@ -100,18 +100,18 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
         bool         *value = entry.second;
 
         if (!value) {
-            logger.log("ConfigLoad: bool param '" + key + "' has null target pointer");
+            logger.log("ConfigLoad: bool param '" + key + "' has null target pointer\n");
             continue;
         }
 
         if (!doc.containsKey(key)) {
-            logger.log("ConfigLoad: bool param '" + key + "' not present in JSON");
+            logger.log("ConfigLoad: bool param '" + key + "' not present in JSON\n");
             continue;
         }
 
         JsonVariant v = doc[key];
         if (v.isNull()) {
-            logger.log("ConfigLoad: bool param '" + key + "' present but null");
+            logger.log("ConfigLoad: bool param '" + key + "' present but null\n");
             continue;
         }
 
@@ -126,11 +126,11 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
             s.toLowerCase();
             result = (s == "1" || s == "true" || s == "yes" || s == "on");
         } else {
-            logger.log("ConfigLoad: bool param '" + key + "' has unsupported JSON type; leaving existing value");
+            logger.log("ConfigLoad: bool param '" + key + "' has unsupported JSON type; leaving existing value\n");
         }
 
         *value = result;
-        logger.log("ConfigLoad: applied bool param '" + key + "' = " + String(*value ? "true" : "false"));
+        logger.log("ConfigLoad: applied bool param '" + key + "' = " + String(*value ? "true\n" : "false\n"));
     }
 
     // 3) W1 sensors from w1-1 / w1-1-name ... w1-6
@@ -146,15 +146,15 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
             if (!hexStr.isEmpty()) {
                 bool ok = hexStringToBytes(hexStr, w1Address[i], W1_NUM_BYTES);
                 if (!ok) {
-                    logger.log("ConfigLoad: invalid hex for '" + hexKey + "' = '" + hexStr + "'");
+                    logger.log("ConfigLoad: invalid hex for '" + hexKey + "' = '" + hexStr + "'\n");
                 } else {
-                    logger.log("ConfigLoad: applied W1 address '" + hexKey + "' = '" + hexStr + "'");
+                    logger.log("ConfigLoad: applied W1 address '" + hexKey + "' = '" + hexStr + "'\n");
                 }
             } else {
-                logger.log("ConfigLoad: W1 address key '" + hexKey + "' present but empty");
+                logger.log("ConfigLoad: W1 address key '" + hexKey + "' present but empty\n");
             }
         } else {
-            logger.log("ConfigLoad: W1 address key '" + hexKey + "' not present in JSON");
+            logger.log("ConfigLoad: W1 address key '" + hexKey + "' not present in JSON\n");
         }
 
         // Name
@@ -162,12 +162,12 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
             const char *nm = doc[nameKey].as<const char*>();
             if (nm) {
                 w1Name[i] = String(nm);
-                logger.log("ConfigLoad: applied W1 name '" + nameKey + "' = '" + w1Name[i] + "'");
+                logger.log("ConfigLoad: applied W1 name '" + nameKey + "' = '" + w1Name[i] + "'\n");
             } else {
-                logger.log("ConfigLoad: W1 name key '" + nameKey + "' present but null");
+                logger.log("ConfigLoad: W1 name key '" + nameKey + "' present but null\n");
             }
         } else {
-            logger.log("ConfigLoad: W1 name key '" + nameKey + "' not present in JSON");
+            logger.log("ConfigLoad: W1 name key '" + nameKey + "' not present in JSON\n");
         }
     }
 
@@ -191,7 +191,7 @@ bool loadConfigFromJsonString(const String &json)
 bool loadConfigFromJsonFile(const char *path)
 {
     if (!SPIFFS.begin(true)) {
-        Serial.println(F("loadConfigFromJsonFile: SPIFFS.begin() failed"));
+        Serial.println(F("loadConfigFromJsonFile: SPIFFS.begin() failed\n"));
         return false;
     }
 

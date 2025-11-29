@@ -9,9 +9,9 @@
 // Unstable Wifi post network/wifi failure
       - plan for fix here is to switch base wifi platform code away from Rui Santos to
 
-// Only supports DHT22 Sensor
+// Only supports DHT22 Sensor [obsolete]]
 
-Immediate need for DSB18b20 Sensor support and multi names for multi sensor.
+Immediate need for DSB18b20 Sensor support and multi names for multi sensor. [done]
 I guess that will be accomplished via the hard coded promexporter names.
 Must be configurable.
 With ability to map DSB ID to a name, such as raw water in, post air cooler, post heat exchanger, etc
@@ -21,6 +21,9 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 // Wifi
 // ESP Pin
 */
+
+/** some params can be set via UI. Anything params loaded later as the json web call will supersede UI params [Nov28'25] */
+
 
 /*********
  *
@@ -307,24 +310,87 @@ void handleWiFiSignalStrength(AsyncWebServerRequest *request)
 
 void tryFetchAndApplyRemoteConfig()
 {
-    const String url = "http://salt-r420:9080/esp-config/salt/stove.json";
+    // configUrl is now the *base* site URL, e.g.
+    // "http://salt-r420:9080/esp-config/salt"
+    const String baseUrl = configUrl;
 
-    String json;
-    if (!downloadConfigJson(url, json))
+    if (baseUrl.length() == 0)
     {
-        logger.log("ConfigFetch: failed to download remote config");
+        logger.log("ConfigFetch: base configUrl is empty; cannot fetch remote config\n");
         return;
     }
 
-    logger.log("ConfigFetch: downloaded " + String(json.length()) + " bytes");
+    // Build GLOBAL URL: <base>/global.json
+    String globalUrl = baseUrl;
+    if (!globalUrl.endsWith("/"))
+    {
+        globalUrl += "/";
+    }
+    globalUrl += "global.json";
+
+    // Build INSTANCE URL: <base>/<locationName>.json
+    String instanceUrl;
+    if (locationName.length() > 0)
+    {
+        instanceUrl = baseUrl;
+        if (!instanceUrl.endsWith("/"))
+        {
+            instanceUrl += "/";
+        }
+        instanceUrl += locationName + ".json";
+    }
+    else
+    {
+        logger.log("ConfigFetch: locationName is empty; will only attempt GLOBAL config\n");
+    }
+
+    String json;
+
+    // 1) Fetch + apply GLOBAL config
+    if (downloadConfigJson(globalUrl, json))
+    {
+        logger.log("ConfigFetch: downloaded GLOBAL config from " + globalUrl +
+                   " (" + String(json.length()) + " bytes)\n");
+
+        if (!loadConfigFromJsonString(json))
+        {
+            logger.log("ConfigFetch: GLOBAL JSON parse/apply FAILED\n");
+        }
+        else
+        {
+            logger.log("ConfigFetch: GLOBAL JSON applied OK\n");
+        }
+    }
+    else
+    {
+        logger.log("ConfigFetch: GLOBAL config fetch failed or not found at " +
+                   globalUrl + "\n");
+    }
+
+    // 2) Fetch + apply INSTANCE config (if we have a locationName)
+    if (instanceUrl.length() == 0)
+    {
+        // No instance URL → we’re done; device runs with GLOBAL (and legacy) only
+        return;
+    }
+
+    if (!downloadConfigJson(instanceUrl, json))
+    {
+        logger.log("ConfigFetch: INSTANCE config fetch FAILED from " +
+                   instanceUrl + " (using GLOBAL-only values if any)\n");
+        return;
+    }
+
+    logger.log("ConfigFetch: downloaded INSTANCE config from " + instanceUrl +
+               " (" + String(json.length()) + " bytes)\n");
 
     if (!loadConfigFromJsonString(json))
     {
-        logger.log("ConfigFetch: JSON parse/apply failed");
+        logger.log("ConfigFetch: INSTANCE JSON parse/apply FAILED\n");
         return;
     }
 
-    logger.log("ConfigFetch: JSON applied OK");
+    logger.log("ConfigFetch: INSTANCE JSON applied OK (overrides GLOBAL where present)\n");
 
     // optional later:
     // saveConfigBackupToFile("/config.json");

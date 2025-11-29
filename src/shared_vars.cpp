@@ -9,6 +9,7 @@
 const char *PARAM_WIFI_SSID = "ssid";
 const char *PARAM_WIFI_PASS = "pass";
 const char *PARAM_LOCATION = "location";
+const char *PARAM_CONFIG_URL = "config-url";
 const char *PARAM_PIN_DHT = "pinDht"; // wish i could change name convention. see above comment
 const char *PARAM_PIN_ACS = "pinAcs"; 
 const char *PARAM_MQTT_SERVER = "mqtt-server";
@@ -36,6 +37,7 @@ const char *PARAM_ENABLE_MQTT = "enableMQTT";
 String ssid;
 String pass;
 String locationName; // used during regular operation, not only setup
+String configUrl;
 String pinDht;
 String pinAcs;
 String mqttServer;
@@ -55,6 +57,7 @@ std::map<String, String *> paramToVariableMap = {
     {"ssid", &ssid},
     {"pass", &pass},
     {"location", &locationName},
+    {"config-url", &configUrl},
     {"pinDht", &pinDht},
     {"pinAcs", &pinAcs},
     {"mqtt-server", &mqttServer},

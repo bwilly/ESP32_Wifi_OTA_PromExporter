@@ -13,6 +13,7 @@ using namespace std;
 extern const char *PARAM_WIFI_SSID; // = "ssid";
 extern const char *PARAM_WIFI_PASS; // = "pass";
 extern const char *PARAM_LOCATION;  // = "location";
+extern const char *PARAM_CONFIG_URL;  
 extern const char *PARAM_PIN_DHT;   // = "pinDht";
 extern const char *PARAM_PIN_ACS;   // = "pinAcs";
 extern const char *PARAM_MQTT_SERVER;
@@ -41,6 +42,7 @@ extern const char *PARAM_ENABLE_MQTT; //= "enableMQTT";
 extern String ssid;
 extern String pass;
 extern String locationName; // used during regular operation, not only setup
+extern String configUrl; // http://salt-r420:9080/esp-config/salt will have instance name .json and global.json appended. /salt is the site name
 extern String pinDht;
 extern String pinAcs;
 extern String mqttServer;
