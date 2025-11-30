@@ -10,6 +10,7 @@ const char *PARAM_WIFI_SSID = "ssid";
 const char *PARAM_WIFI_PASS = "pass";
 const char *PARAM_LOCATION = "location";
 const char *PARAM_CONFIG_URL = "config-url";
+const char *PARAM_OTA_URL = "ota-url";
 const char *PARAM_PIN_DHT = "pinDht"; // wish i could change name convention. see above comment
 const char *PARAM_PIN_ACS = "pinAcs"; 
 const char *PARAM_MQTT_SERVER = "mqtt-server";
@@ -38,6 +39,7 @@ String ssid;
 String pass;
 String locationName; // used during regular operation, not only setup
 String configUrl;
+String otaUrl;
 String pinDht;
 String pinAcs;
 String mqttServer;
@@ -53,11 +55,13 @@ String w1Name[6];        // todo:remove this and above after refactor Nov8'24
 
 // uint8_t w1Sensors[];
 
+// always must update me when adding new config params
 std::map<String, String *> paramToVariableMap = {
     {"ssid", &ssid},
     {"pass", &pass},
     {"location", &locationName},
     {"config-url", &configUrl},
+    {"ota-url", &otaUrl},
     {"pinDht", &pinDht},
     {"pinAcs", &pinAcs},
     {"mqtt-server", &mqttServer},

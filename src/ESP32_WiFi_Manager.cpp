@@ -81,6 +81,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "Config.h"
 #include "MessagePublisher.h"
 #include "ConfigDump.h"
+#include "OtaUpdate.h"
+
 
 #include "version.h"
 // #include <TelnetStream.h>
@@ -103,6 +105,10 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 
 #define AP_REBOOT_TIMEOUT 600000 // 10 minutes in milliseconds
 unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
+
+volatile bool g_otaRequested = false;
+String g_otaUrl;
+
 
 
 // BEFORE (something like this)
@@ -956,6 +962,40 @@ void setup()
         request->send(SPIFFS, path, "application/json");
     });
 
+    
+
+    server.on("/ota/run", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Look up "ota-url" in paramToVariableMap safely
+        auto it = paramToVariableMap.find("ota-url");
+        if (it == paramToVariableMap.end() || it->second == nullptr) {
+            request->send(400, "text/plain",
+                          "Missing or null 'ota-url' param in config");
+            return;
+        }
+
+        String fwUrl = *(it->second);
+        fwUrl.trim();
+
+        if (fwUrl.length() == 0) {
+            request->send(400, "text/plain",
+                          "Empty 'ota-url' value in config");
+            return;
+        }
+
+        logger.log("OTA requested from URL: " + fwUrl + "\n");
+
+        // Defer actual OTA to the main loop so we don't block async_tcp
+        g_otaUrl      = fwUrl;
+        g_otaRequested = true;
+
+        request->send(200, "text/plain",
+                      "OTA scheduled from " + fwUrl +
+                      "\nDevice will reboot if update succeeds.");
+    });
+
+
+
+
 
     
                 // server.serveStatic("/", SPIFFS, "/");
@@ -1149,6 +1189,20 @@ float calculatePercentageChange(float oldValue, float newValue)
 void loop()
 {
   unsigned long currentMillis = millis();
+
+  // Defered OTA execution from main loop (not async_tcp task)
+  if (g_otaRequested) {
+    g_otaRequested = false;  // clear first to avoid reentry if OTA fails
+
+    logger.log("OTA: executing deferred OTA from loop using URL = " + g_otaUrl + "\n");
+
+    bool ok = performHttpOta(g_otaUrl);
+    if (!ok) {
+      logger.log("OTA: performHttpOta() failed; no reboot will occur\n");
+    }
+
+    // If performHttpOta succeeds, it calls ESP.restart() and we never reach here.
+  }
 
   // Check if we are in AP mode and if so, if it's time to reboot
   if (WiFi.getMode() == WIFI_AP) // && WiFi.softAPIP().toString() == "192.168.4.1")

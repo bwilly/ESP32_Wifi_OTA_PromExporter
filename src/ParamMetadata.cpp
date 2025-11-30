@@ -11,6 +11,7 @@ std::vector<ParamMetadata> paramList = {
     {"pass", makePath(PARAM_WIFI_PASS), ParamMetadata::STRING},
     {"location", makePath(PARAM_LOCATION), ParamMetadata::STRING},
     {"config-url", makePath(PARAM_CONFIG_URL), ParamMetadata::STRING},
+    {"config-url", makePath(PARAM_OTA_URL), ParamMetadata::STRING},    
     {"pinDht", makePath(PARAM_PIN_DHT), ParamMetadata::STRING},
     {"pinAcs", makePath(PARAM_PIN_ACS), ParamMetadata::STRING},
     {"mqtt-server", makePath(PARAM_MQTT_SERVER), ParamMetadata::STRING},
