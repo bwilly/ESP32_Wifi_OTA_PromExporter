@@ -109,6 +109,11 @@ unsigned long apStartTime = 0;   // Variable to track the start time in AP mode
 volatile bool g_otaRequested = false;
 String g_otaUrl;
 
+// Remote config JSON merge docs (kept off stack)
+static const size_t REMOTE_JSON_CAPACITY = 4096;
+static StaticJsonDocument<REMOTE_JSON_CAPACITY> g_remoteMergedDoc;
+static StaticJsonDocument<REMOTE_JSON_CAPACITY> g_remoteTmpDoc;
+
 
 
 // BEFORE (something like this)
@@ -314,13 +319,47 @@ void handleWiFiSignalStrength(AsyncWebServerRequest *request)
   request->send(200, "text/plain", rssiCharArray);
 }
 
+static bool readFileToString(const char *path, String &out)
+{
+    File f = SPIFFS.open(path, FILE_READ);
+    if (!f) {
+        return false;
+    }
+    out = f.readString();
+    f.close();
+    return true;
+}
+
+static bool writeStringToFile(const char *path, const String &data)
+{
+    File f = SPIFFS.open(path, FILE_WRITE);  // truncates or creates
+    if (!f) {
+        Serial.print(F("writeStringToFile: failed to open "));
+        Serial.print(path);
+        Serial.println(F(" for writing"));
+        return false;
+    }
+
+    size_t written = f.print(data);
+    f.close();
+
+    if (written != data.length()) {
+        Serial.print(F("writeStringToFile: short write to "));
+        Serial.print(path);
+        Serial.print(F(" (expected "));
+        Serial.print(data.length());
+        Serial.print(F(" bytes, wrote "));
+        Serial.print(written);
+        Serial.println(F(")"));
+        return false;
+    }
+
+    return true;
+}
+
+
 void tryFetchAndApplyRemoteConfig()
 {
-    // Take a snapshot of current effective config (legacy + any /config.json already loaded)
-    String beforeJson = buildConfigJsonFlat();
-
-    // configUrl is now the *base* site URL, e.g.
-    // "http://salt-r420:9080/esp-config/salt"
     const String baseUrl = configUrl;
 
     if (baseUrl.length() == 0)
@@ -331,19 +370,17 @@ void tryFetchAndApplyRemoteConfig()
 
     // Build GLOBAL URL: <base>/global.json
     String globalUrl = baseUrl;
-    if (!globalUrl.endsWith("/"))
-    {
+    if (!globalUrl.endsWith("/")) {
         globalUrl += "/";
     }
-    globalUrl += "global.json";
+    globalUrl += "global.json";   // <-- make sure this says "global.json", not "global."
 
     // Build INSTANCE URL: <base>/<locationName>.json
     String instanceUrl;
     if (locationName.length() > 0)
     {
         instanceUrl = baseUrl;
-        if (!instanceUrl.endsWith("/"))
-        {
+        if (!instanceUrl.endsWith("/")) {
             instanceUrl += "/";
         }
         instanceUrl += locationName + ".json";
@@ -353,134 +390,100 @@ void tryFetchAndApplyRemoteConfig()
         logger.log("ConfigFetch: locationName is empty; will only attempt GLOBAL config\n");
     }
 
+    // Load previous remote snapshot
+    String previousRemoteJson;
+    bool hasPreviousRemote = readFileToString("/config-remote.json", previousRemoteJson);
+    if (hasPreviousRemote) {
+        logger.log("ConfigFetch: found previous remote snapshot /config-remote.json\n");
+    } else {
+        logger.log("ConfigFetch: no previous /config-remote.json (first run or missing)\n");
+    }
+
+    // Clear and prepare merged remote doc
+    g_remoteMergedDoc.clear();
+    JsonObject mergedRoot = g_remoteMergedDoc.to<JsonObject>();
+
+    bool anyRemoteApplied = false;
     String json;
 
-    // 1) Fetch + apply GLOBAL config
-    if (downloadConfigJson(globalUrl, json))
-    {
-        logger.log("ConfigFetch: downloaded GLOBAL config from " + globalUrl +
+    auto fetchApplyAndMerge = [&](const String &url, const char *label) {
+        if (url.length() == 0) {
+            return;
+        }
+
+        if (!downloadConfigJson(url, json)) {
+            logger.log(String("ConfigFetch: ") + label +
+                       " config fetch FAILED or not found at " + url + "\n");
+            return;
+        }
+
+        logger.log(String("ConfigFetch: downloaded ") + label + " config from " + url +
                    " (" + String(json.length()) + " bytes)\n");
 
-        if (!loadConfigFromJsonString(json))
-        {
-            logger.log("ConfigFetch: GLOBAL JSON parse/apply FAILED\n");
-        }
-        else
-        {
-            logger.log("ConfigFetch: GLOBAL JSON applied OK\n");
-        }
-    }
-    else
-    {
-        logger.log("ConfigFetch: GLOBAL config fetch failed or not found at " +
-                   globalUrl + "\n");
-    }
-
-    // 2) Fetch + apply INSTANCE config (if we have a locationName)
-    if (instanceUrl.length() == 0)
-    {
-        // No instance URL → we’re done; device runs with GLOBAL (and legacy) only
-        // Now decide whether GLOBAL changed anything
-        String afterJson = buildConfigJsonFlat();
-
-        if (afterJson == beforeJson)
-        {
-            logger.log("ConfigFetch: no config changes detected (GLOBAL-only case); no reboot\n");
+        // Apply to in-memory params
+        if (!loadConfigFromJsonString(json)) {
+            logger.log(String("ConfigFetch: ") + label + " JSON parse/apply FAILED\n");
             return;
         }
 
-        if (saveConfigBackupToFile("/config.json"))
-        {
-            logger.log("ConfigFetch: persisted merged config to /config.json (GLOBAL-only change); rebooting\n");
-        }
-        else
-        {
-            logger.log("ConfigFetch: FAILED to persist merged config to /config.json (GLOBAL-only change); rebooting anyway\n");
-        }
+        logger.log(String("ConfigFetch: ") + label + " JSON applied OK\n");
 
-        ESP.restart();
-        return;
-    }
-
-    if (!downloadConfigJson(instanceUrl, json))
-    {
-        logger.log("ConfigFetch: INSTANCE config fetch FAILED from " +
-                   instanceUrl + " (using GLOBAL-only values if any)\n");
-
-        // Even if instance failed, GLOBAL might have changed; check diff
-        String afterJson = buildConfigJsonFlat();
-
-        if (afterJson == beforeJson)
-        {
-            logger.log("ConfigFetch: no config changes detected after failed INSTANCE fetch; no reboot\n");
+        // Merge into remote snapshot doc
+        g_remoteTmpDoc.clear();
+        DeserializationError err = deserializeJson(g_remoteTmpDoc, json);
+        if (err) {
+            logger.log(String("ConfigFetch: ") + label +
+                       " JSON re-parse FAILED for snapshot merge\n");
             return;
         }
 
-        if (saveConfigBackupToFile("/config.json"))
-        {
-            logger.log("ConfigFetch: persisted merged config to /config.json (GLOBAL-only change with failed INSTANCE); rebooting\n");
-        }
-        else
-        {
-            logger.log("ConfigFetch: FAILED to persist merged config to /config.json (GLOBAL-only change with failed INSTANCE); rebooting anyway\n");
+        JsonObject src = g_remoteTmpDoc.as<JsonObject>();
+        for (JsonPair kv : src) {
+            mergedRoot[kv.key()] = kv.value();   // instance overrides global on same key
         }
 
-        ESP.restart();
+        anyRemoteApplied = true;
+    };
+
+    // GLOBAL then INSTANCE
+    fetchApplyAndMerge(globalUrl, "GLOBAL");
+    if (instanceUrl.length() > 0) {
+        fetchApplyAndMerge(instanceUrl, "INSTANCE");
+    }
+
+    if (!anyRemoteApplied) {
+        logger.log("ConfigFetch: no remote configs applied; leaving local config as-is; no reboot\n");
         return;
     }
 
-    logger.log("ConfigFetch: downloaded INSTANCE config from " + instanceUrl +
-               " (" + String(json.length()) + " bytes)\n");
+    // Serialize new remote snapshot
+    String newRemoteJson;
+    serializeJson(g_remoteMergedDoc, newRemoteJson);
 
-    if (!loadConfigFromJsonString(json))
-    {
-        logger.log("ConfigFetch: INSTANCE JSON parse/apply FAILED\n");
-
-        // INSTANCE parse failed; GLOBAL may still have changed
-        String afterJson = buildConfigJsonFlat();
-
-        if (afterJson == beforeJson)
-        {
-            logger.log("ConfigFetch: no config changes detected after INSTANCE parse failure; no reboot\n");
-            return;
-        }
-
-        if (saveConfigBackupToFile("/config.json"))
-        {
-            logger.log("ConfigFetch: persisted merged config to /config.json (GLOBAL-only change, INSTANCE parse fail); rebooting\n");
-        }
-        else
-        {
-            logger.log("ConfigFetch: FAILED to persist merged config to /config.json (GLOBAL-only change, INSTANCE parse fail); rebooting anyway\n");
-        }
-
-        ESP.restart();
+    // Compare snapshots *only on remote config*
+    if (hasPreviousRemote && (newRemoteJson == previousRemoteJson)) {
+        logger.log("ConfigFetch: remote config unchanged vs /config-remote.json; no persist, no reboot\n");
         return;
     }
 
-    logger.log("ConfigFetch: INSTANCE JSON applied OK (overrides GLOBAL where present)\n");
+    logger.log("ConfigFetch: remote config changed; persisting and rebooting\n");
 
-    // 3) Now compare full, merged config before vs after to decide on persist + reboot
-    String afterJson = buildConfigJsonFlat();
-
-    if (afterJson == beforeJson)
-    {
-        logger.log("ConfigFetch: no config changes detected after GLOBAL+INSTANCE; no reboot\n");
-        return;
+    // Persist remote snapshot
+    if (writeStringToFile("/config-remote.json", newRemoteJson)) {
+        logger.log("ConfigFetch: wrote new remote snapshot to /config-remote.json\n");
+    } else {
+        logger.log("ConfigFetch: FAILED to write /config-remote.json\n");
     }
 
-    if (saveConfigBackupToFile("/config.json"))
-    {
-        logger.log("ConfigFetch: persisted merged config to /config.json; rebooting\n");
-    }
-    else
-    {
-        logger.log("ConfigFetch: FAILED to persist merged config to /config.json; rebooting anyway to pick up in-memory changes\n");
+    // Persist full effective config
+    if (saveConfigBackupToFile("/config.json")) {
+        logger.log("ConfigFetch: persisted merged effective config to /config.json; rebooting\n");
+    } else {
+        logger.log("ConfigFetch: FAILED to persist merged config to /config.json; rebooting anyway\n");
     }
 
     ESP.restart();
 }
-
 
 // Function to initialize the Zabbix agent server
 void initZabbixServer()
@@ -780,28 +783,10 @@ void setup()
     Serial.println("ConfigLoad: no /config.json (or parse error); using values from loadPersistedValues().");
   }
 
-
-  // i am commenting out below b/c i don't believe it has purpose (bwilly)
-  // Set GPIO 2 as an OUTPUT
-  // Serial.println("ledPin mode and digitalWrite...");
-  // pinMode(ledPin, OUTPUT);
-  // digitalWrite(ledPin, LOW);
-
-  // const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
-  // for (int i = 0; i < 3; i++)
-  // {
-  //   loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
-  // }
-
-  // w1Name[0] = readFile(SPIFFS, w1_1_name_Path.c_str());
-  // w1Name[1] = readFile(SPIFFS, w1_2_name_Path.c_str());
-  // w1Name[2] = readFile(SPIFFS, w1_3_name_Path.c_str());
-
-  // Load parameters from SPIFFS using paramList
-  // replaces commented out code directly above
+  
   for (const auto &paramMetadata : paramList)
   {
-    if (paramMetadata.name.startsWith("w1-"))
+    if (paramMetadata.name.startsWith(PARAM_W1_1_NAME)) // specific to w1 sensors, but they all load, so only calling it one time on teh first param [nov'25]
     {
       // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
       loadW1SensorConfigFromFile(SPIFFS, "/w1Json", w1Sensors); // moved away from coupleing file name of storage to teh paramMetaData. maybe i should use it. nov'24
@@ -961,6 +946,20 @@ void setup()
         // Stream directly from SPIFFS without loading the whole file into RAM
         request->send(SPIFFS, path, "application/json");
     });
+
+    // View the last downloaded remote snapshot: /config/remote
+    server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request) {
+        const char *path = "/config-remote.json";
+
+        if (!SPIFFS.exists(path)) {
+            request->send(404, "text/plain", "No /config-remote.json stored");
+            return;
+        }
+
+        // Stream straight from SPIFFS — no RAM-loading needed
+        request->send(SPIFFS, path, "application/json");
+    });
+
 
     
 
