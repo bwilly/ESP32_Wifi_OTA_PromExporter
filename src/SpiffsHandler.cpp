@@ -59,49 +59,6 @@ void loadPersistedValues()
     }
 }
 
-// void loadPersistedValues()
-// {
-//     // Load values saved in SPIFFS
-//     Serial.println("loading SPIFFS values...");
-//     ssid = readFile(SPIFFS, ssidPath.c_str());
-//     pass = readFile(SPIFFS, passPath.c_str());
-//     locationName = readFile(SPIFFS, locationNamePath.c_str());
-//     pinDht = readFile(SPIFFS, pinDhtPath.c_str());
-//     mqttServer = readFile(SPIFFS, mqttServerPath.c_str());
-//     mqttPort = readFile(SPIFFS, mqttPortPath.c_str());
-//     mainDelay = readFile(SPIFFS, mainDelayPath.c_str()).toInt();
-//     w1Enabled = (readFile(SPIFFS, enableW1Path.c_str()) == "true");
-//     dhtEnabled = (readFile(SPIFFS, enableDHTPath.c_str()) == "true");
-//     mqttEnabled = (readFile(SPIFFS, enableMQTTPath.c_str()) == "true");
-// }
-
-// void parseHexToArray(const String &value, uint8_t array[8])
-// {
-//     int startIndex = value.indexOf('{');
-//     int endIndex = value.indexOf('}');
-
-//     if (startIndex != -1 && endIndex != -1)
-//     {
-//         String subValue = value.substring(startIndex + 1, endIndex);
-
-//         int byteCount = 0;
-//         int commaIndex;
-//         while ((commaIndex = subValue.indexOf(',')) != -1 && byteCount < W1_NUM_BYTES)
-//         {
-//             // String byteStr = subValue.substring(0, commaIndex).trim();
-//             String byteStr = subValue.substring(0, commaIndex);
-//             byteStr.trim();
-//             array[byteCount] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
-
-//             subValue = subValue.substring(commaIndex + 1);
-//             byteCount++;
-//         }
-//         if (byteCount < W1_NUM_BYTES)
-//         { // Process the last byte
-//             array[byteCount] = (uint8_t)strtol(subValue.c_str(), NULL, 16);
-//         }
-//     }
-// }
 
 void parseHexToArray(const String &value, std::array<uint8_t, 8> intoArray)
 {

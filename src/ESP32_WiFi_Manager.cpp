@@ -225,6 +225,12 @@ const int ledPin = 2;
 
 String ledState;
 
+// Forward declarations for setup refactor
+void setupSpiffsAndConfig();
+void setupStationMode();
+void setupAccessPointMode();
+
+
 void onOTAEnd(bool success)
 {
   // Log when OTA has finished
@@ -760,6 +766,7 @@ void populateW1Addresses(uint8_t w1Address[6][8], String w1Name[6], const Sensor
 }
 
 // Entry point
+// Entry point
 void setup()
 {
   // Serial port for debugging purposes
@@ -768,6 +775,22 @@ void setup()
   // Enable verbose logging for the WiFi component
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
 
+  // SPIFFS, legacy params, /config.json, W1 sensors, etc.
+  setupSpiffsAndConfig();
+
+  // Decide which path: Station vs AP
+  if (initWiFi())   // Station Mode
+  {
+    setupStationMode();
+  }
+  else
+  {
+    setupAccessPointMode();
+  }
+}
+
+void setupSpiffsAndConfig()
+{
   Serial.println("initSpiffs...");
   initSPIFFS();
 
@@ -783,10 +806,27 @@ void setup()
     Serial.println("ConfigLoad: no /config.json (or parse error); using values from loadPersistedValues().");
   }
 
-  
+  // i am commenting out below b/c i don't believe it has purpose (bwilly)
+  // Set GPIO 2 as an OUTPUT
+  // Serial.println("ledPin mode and digitalWrite...");
+  // pinMode(ledPin, OUTPUT);
+  // digitalWrite(ledPin, LOW);
+
+  // const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
+  // for (int i = 0; i < 3; i++)
+  // {
+  //   loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
+  // }
+
+  // w1Name[0] = readFile(SPIFFS, w1_1_name_Path.c_str());
+  // w1Name[1] = readFile(SPIFFS, w1_2_name_Path.c_str());
+  // w1Name[2] = readFile(SPIFFS, w1_3_name_Path.c_str());
+
+  // Load parameters from SPIFFS using paramList
+  // replaces commented out code directly above
   for (const auto &paramMetadata : paramList)
   {
-    if (paramMetadata.name.startsWith(PARAM_W1_1_NAME)) // specific to w1 sensors, but they all load, so only calling it one time on teh first param [nov'25]
+    if (paramMetadata.name.startsWith(PARAM_W1_1_NAME)) // just match the first w1 as the delegated loaders will load them all
     {
       // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
       loadW1SensorConfigFromFile(SPIFFS, "/w1Json", w1Sensors); // moved away from coupleing file name of storage to teh paramMetaData. maybe i should use it. nov'24
@@ -804,104 +844,100 @@ void setup()
   Serial.println(locationName);
   // Serial.println(ip);
   // Serial.println(gateway);
+}
 
-  
+void setupStationMode()
+{
+  // setup: path1 (Station Mode)
 
-  // setup: path1
-  if (initWiFi())
-  { // Station Mode
+  tryFetchAndApplyRemoteConfig();
 
-    
-    tryFetchAndApplyRemoteConfig();
-    
+  // Start Telnet stream
+  // TelnetStream.begin();            // start Telnet server on port 23
+  // initTelnet();
 
-    
-    // Start Telnet stream
-    // TelnetStream.begin();            // start Telnet server on port 23
-    // initTelnet();
+  // (B) Start async Telnet-to-Serial forwarding:
+  //     - 115200 is the baudrate to mirror (must match Serial.begin)
+  //     - true  = link Telnet <-> Serial
+  //     - false = don’t publish mDNS name
 
-    // (B) Start async Telnet-to-Serial forwarding:
-    //     - 115200 is the baudrate to mirror (must match Serial.begin)
-    //     - true  = link Telnet <-> Serial
-    //     - false = don’t publish mDNS name
+  // telnetSerial.begin(115200, true, false);
 
-    // telnetSerial.begin(115200, true, false);
+  // start our async Telnet server
+  initTelnetServer();
+  logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
 
-    // start our async Telnet server
-    initTelnetServer();
-    logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
+  logger.log("initDNS...\n");
+  initDNS();
 
-    logger.log("initDNS...\n");
-    initDNS();
+  // Initialize Zabbix agent server
+  initZabbixServer();
 
-    // Initialize Zabbix agent server
-    initZabbixServer();
+  // @pattern
+  bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
+  if (dhtEnabledValue)
+  {
+    initSensorTask(); // dht
+  }
+  if (acs712Enabled)
+  {
+    setupACS712();
+  }
 
-    // @pattern
-    bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
-    if (dhtEnabledValue)
-    {
-      initSensorTask(); // dht
-    }
-    if (acs712Enabled)
-    {
-      setupACS712();
-    }
+  logger.log("set web root /index.html...\n");
+  // Route for root / web page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
+  server.serveStatic("/", SPIFFS, "/");
 
-    logger.log("set web root /index.html...\n");
-    // Route for root / web page
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
-    server.serveStatic("/", SPIFFS, "/");
-
-    // Route to set GPIO state to HIGH
-    server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
+  // Route to set GPIO state to HIGH
+  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
       digitalWrite(ledPin, HIGH);
       request->send(SPIFFS, "/index.html", "text/html", false, processor); });
 
-    // Route to set GPIO state to LOW
-    server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
+  // Route to set GPIO state to LOW
+  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
       digitalWrite(ledPin, LOW);
       request->send(SPIFFS, "/index.html", "text/html", false, processor); });
 
-    // Route to Prometheus Metrics Exporter
-    server.on("/metrics", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", readAndGeneratePrometheusExport(locationName.c_str())); });
+  // Route to Prometheus Metrics Exporter
+  server.on("/metrics", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", readAndGeneratePrometheusExport(locationName.c_str())); });
 
-    server.on("/devicename", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", MakeMine(MDNS_DEVICE_NAME)); });
+  server.on("/devicename", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", MakeMine(MDNS_DEVICE_NAME)); });
 
-    server.on("/bssid", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", WiFi.BSSIDstr()); });
+  server.on("/bssid", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", WiFi.BSSIDstr()); });
 
-    server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
+  server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
                   char buffer[32];  // Buffer to hold the string representation of the temperature
                   float temperature = readDHTTemperature();
                   snprintf(buffer, sizeof(buffer), "%.2f", temperature);
                   request->send(200, "text/html", buffer); });
 
-    // copy/paste from setup section for AP -- changing URL path
-    // todo: consolidate this copied code
-    server.on("/manage", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
+  // copy/paste from setup section for AP -- changing URL path
+  // todo: consolidate this copied code
+  server.on("/manage", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
-    server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", version); });
+  server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", version); });
 
-    server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "text/html", pinDht); });
+  server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", pinDht); });
 
-    server.on("/onewire", HTTP_GET, [](AsyncWebServerRequest *request)
-              {           
+  server.on("/onewire", HTTP_GET, [](AsyncWebServerRequest *request)
+            {           
                 String result = printDS18b20();                     
                 request->send(200, "text/html", result); });
 
-    // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
-    server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
+  // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
+  server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
                 temptSensor.requestTemperatures();
                 TemperatureReading *readings = temptSensor.getTemperatureReadings();
 
@@ -913,9 +949,9 @@ void setup()
                 // request->send(200, "text/html", SendHTMLxxx());
               });
 
-    // todo: find out why some readings provide -127
-    server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
-              {           
+  // todo: find out why some readings provide -127
+  server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
+            {           
                 // sensors.requestTemperatures();
                 temptSensor.requestTemperatures();
                 TemperatureReading *readings = temptSensor.getTemperatureReadings();
@@ -929,203 +965,183 @@ void setup()
 
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
-    // i believe this is the in-mem representation
-    server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request) {
-        String json = buildConfigJsonFlat();
-        request->send(200, "application/json", json);
-    });
-    // View the locally stored working config: /config.json
-    server.on("/config/local", HTTP_GET, [](AsyncWebServerRequest *request) {
-        const char *path = "/config.json";
+  // i believe this is the in-mem representation
+  server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request) {
+      String json = buildConfigJsonFlat();
+      request->send(200, "application/json", json);
+  });
 
-        if (!SPIFFS.exists(path)) {
-            request->send(404, "text/plain", "No /config.json stored");
-            return;
-        }
+  // View the locally stored working config: /config.json
+  server.on("/config/local", HTTP_GET, [](AsyncWebServerRequest *request) {
+      const char *path = "/config.json";
 
-        // Stream directly from SPIFFS without loading the whole file into RAM
-        request->send(SPIFFS, path, "application/json");
-    });
+      if (!SPIFFS.exists(path)) {
+          request->send(404, "text/plain", "No /config.json stored");
+          return;
+      }
 
-    // View the last downloaded remote snapshot: /config/remote
-    server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request) {
-        const char *path = "/config-remote.json";
+      // Stream directly from SPIFFS without loading the whole file into RAM
+      request->send(SPIFFS, path, "application/json");
+  });
 
-        if (!SPIFFS.exists(path)) {
-            request->send(404, "text/plain", "No /config-remote.json stored");
-            return;
-        }
+  // View the last downloaded remote snapshot: /config-remote.json
+  server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request) {
+      const char *path = "/config-remote.json";
 
-        // Stream straight from SPIFFS — no RAM-loading needed
-        request->send(SPIFFS, path, "application/json");
-    });
+      if (!SPIFFS.exists(path)) {
+          request->send(404, "text/plain", "No /config-remote.json stored");
+          return;
+      }
 
+      request->send(SPIFFS, path, "application/json");
+  });
 
-    
+  server.on("/ota/run", HTTP_GET, [](AsyncWebServerRequest *request) {
 
-    server.on("/ota/run", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Look up "ota-url" in paramToVariableMap safely
-        auto it = paramToVariableMap.find("ota-url");
-        if (it == paramToVariableMap.end() || it->second == nullptr) {
-            request->send(400, "text/plain",
-                          "Missing or null 'ota-url' param in config");
-            return;
-        }
+      auto it = paramToVariableMap.find("ota-url");
+      if (it == paramToVariableMap.end() || it->second == nullptr) {
+          request->send(400, "text/plain",
+                        "Missing or null 'ota-url' param in config");
+          return;
+      }
 
-        String fwUrl = *(it->second);
-        fwUrl.trim();
+      String fwUrl = *(it->second);
+      fwUrl.trim();
 
-        if (fwUrl.length() == 0) {
-            request->send(400, "text/plain",
-                          "Empty 'ota-url' value in config");
-            return;
-        }
+      if (fwUrl.length() == 0) {
+          request->send(400, "text/plain",
+                        "Empty 'ota-url' value in config");
+          return;
+      }
 
-        logger.log("OTA requested from URL: " + fwUrl + "\n");
+      logger.log("OTA: requested via /ota/run, URL = " + fwUrl + "\n");
 
-        // Defer actual OTA to the main loop so we don't block async_tcp
-        g_otaUrl      = fwUrl;
-        g_otaRequested = true;
+      // schedule OTA (run in loop() to avoid async_tcp WDT)
+      g_otaUrl = fwUrl;
+      g_otaRequested = true;
 
-        request->send(200, "text/plain",
-                      "OTA scheduled from " + fwUrl +
-                      "\nDevice will reboot if update succeeds.");
-    });
+      request->send(200, "text/plain",
+                    "OTA scheduled from " + fwUrl +
+                    "\nDevice will reboot if update succeeds.");
+  });
 
 
-
-
-
-    
-                // server.serveStatic("/", SPIFFS, "/");
-
-    // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
-    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-              {
+  // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
+  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
       handlePostParameters(request);
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(mainDelay.toInt()); // delay(3000);
       ESP.restart(); });
 
-    // Correct the onEnd function signature
-    // AsyncElegantOTA.onEnd([](bool success)
-    //                       {
-    // if (success) {
-    //     Serial.println("OTA End - restarting device.");
-    //     ESP.restart();  // Restart the ESP32 after OTA is completed.
-    // } else {
-    //     Serial.println("OTA failed.");
-    // } });
+  // uses path like server.on("/update")
+  // AsyncElegantOTA.begin(&server);
+  ElegantOTA.begin(&server);
+  ElegantOTA.onStart(onOTAStart);
+  // ElegantOTA.onProgress(onOTAProgress);
+  ElegantOTA.onEnd(onOTAEnd);
 
-    // Correct the onProgress function signature (optional, depending on version)
-    // AsyncElegantOTA.onProgress([](unsigned int progress, unsigned int total)
-    //                            { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+  configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity
+  time_t now;
+  while (!(time(&now)))
+  { // Wait for time to be set
+    logger.log("Waiting for time...\n");
+    delay(1000);
+  }
 
-    // uses path like server.on("/update")
-    // AsyncElegantOTA.begin(&server);
-    ElegantOTA.begin(&server);
-    ElegantOTA.onStart(onOTAStart);
-    // ElegantOTA.onProgress(onOTAProgress);
-    ElegantOTA.onEnd(onOTAEnd);
+  server.begin();
 
-    configTime(0, 0, "pool.ntp.org"); // Set timezone offset and daylight offset to 0 for simplicity
-    time_t now;
-    while (!(time(&now)))
-    { // Wait for time to be set
-      logger.log("Waiting for time...\n");
-      delay(1000);
-    }
+  // Set MQTT server
+  logger.log("Setting MQTT server and port...\n");
+  logger.log(*paramToVariableMap["mqtt-server"]);
+  logger.log(*paramToVariableMap["mqtt-port"]);
+  logger.log("\n");
 
-    server.begin();
+  if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
+      paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
+  {
 
-    // Set MQTT server
-    logger.log("Setting MQTT server and port...\n");
-    logger.log(*paramToVariableMap["mqtt-server"]);
-    logger.log(*paramToVariableMap["mqtt-port"]);
-    logger.log("\n");
+    const char *serverName = paramToVariableMap["mqtt-server"]->c_str();
+    int port = paramToVariableMap["mqtt-port"]->toInt();
 
-    if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
-        paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
-    {
-
-      const char *server = paramToVariableMap["mqtt-server"]->c_str();
-      int port = paramToVariableMap["mqtt-port"]->toInt();
-
-      mqClient.setServer(server, port);
-    }
-    else
-    {
-      logger.log("Error setting MQTT from params.\n");
-    }
-    logger.log("\nEntry setup loop complete.");
+    mqClient.setServer(serverName, port);
   }
   else
+  {
+    logger.log("Error setting MQTT from params.\n");
+  }
+  logger.log("\nEntry setup loop complete.");
+}
+
+void setupAccessPointMode()
+{
   // SETUP : Path2
-  { // This path is meant to run only upon initial one-time setup
+  // This path is meant to run only upon initial one-time setup
 
-    apStartTime = millis(); // Record the start time in AP mode
+  apStartTime = millis(); // Record the start time in AP mode
 
+  Serial.println("Setting AP (Access Point)");
 
-    Serial.println("Setting AP (Access Point)");
+  // Build base SSID (without prefix)
+  String base;
 
-    // Build base SSID (without prefix)
-    String base;
+  if (locationName.length() > 0) {
+    // Use configured location name
+    base = locationName;
+  } else {
+    // Build fallback with unique suffix from MAC
+    uint64_t mac = ESP.getEfuseMac();
+    uint32_t suffix = (uint32_t)(mac & 0xFFFFFF);  // last 3 bytes
 
-    if (locationName.length() > 0) {
-      // Use configured location name
-      base = locationName;
-    } else {
-      // Build fallback with unique suffix from MAC
-      uint64_t mac = ESP.getEfuseMac();
-      uint32_t suffix = (uint32_t)(mac & 0xFFFFFF);  // last 3 bytes
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%06X", suffix);
+    base = buf;
+  }
 
-      char buf[32];
-      snprintf(buf, sizeof(buf), "%06X", suffix);
-      base = buf;
-    }
+  // Final SSID: ALWAYS prefixed with "sesp-"
+  String apSsid = "srl-sesp-" + base;
 
-    // Final SSID: ALWAYS prefixed with "sesp-"
-    String apSsid = "srl-sesp-" + base;
+  // Guarantee SSID ≤ 31 chars (Wi-Fi limit)
+  if (apSsid.length() > 31) {
+    apSsid = apSsid.substring(0, 31);
+  }
 
-    // Guarantee SSID ≤ 31 chars (Wi-Fi limit)
-    if (apSsid.length() > 31) {
-      apSsid = apSsid.substring(0, 31);
-    }
+  WiFi.softAP(apSsid.c_str(), "saltmeadow");
 
-    WiFi.softAP(apSsid.c_str(), "saltmeadow");
+  Serial.print("AP SSID: ");
+  Serial.println(apSsid);
 
-    Serial.print("AP SSID: ");
-    Serial.println(apSsid);
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP);
 
-    IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(IP);
+  if (!SPIFFS.begin(true))
+  {
+    Serial.println("SPIFFS is out of scope per bwilly!");
+  }
+  // Web Server Root URL
+  Serial.print("Setting web root path to /wifimanager.html...\n");
 
-    if (!SPIFFS.begin(true))
-    {
-      Serial.println("SPIFFS is out of scope per bwilly!");
-    }
-    // Web Server Root URL
-    Serial.print("Setting web root path to /wifimanager.html...\n");
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
+  server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
 
-    server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
-
-    Serial.print("Setting root POST and delegating to handlePostParameters...\n");
-    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-              {
+  Serial.print("Setting root POST and delegating to handlePostParameters...\n");
+  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
       handlePostParameters(request);
       request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
       delay(3000);
       logger.log("Updated. Now restarting...\n");
       ESP.restart(); });
 
-    logger.log("Starting web server...\n");
-    server.begin();
-  }
+  logger.log("Starting web server...\n");
+  server.begin();
 }
+
+
+
 
 void reconnectMQ()
 {
