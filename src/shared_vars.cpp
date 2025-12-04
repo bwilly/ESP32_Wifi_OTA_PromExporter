@@ -31,7 +31,9 @@ const char *PARAM_W1_5_NAME = "w1-5-name";
 const char *PARAM_W1_6_NAME = "w1-6-name";
 const char *PARAM_ENABLE_W1 = "enableW1";
 const char *PARAM_ENABLE_DHT = "enableDHT";
-const char *PARAM_ENABLE_ACS = "enableAcs712";
+const char *PARAM_ENABLE_ACS = "enableCHT832x";
+const char *PARAM_ENABLE_CHT832x = "enableAcs712";
+
 const char *PARAM_ENABLE_MQTT = "enableMQTT";
 
 // Variables to save values from HTML form
@@ -47,6 +49,7 @@ String mqttPort;
 bool w1Enabled;
 bool dhtEnabled;
 bool acs712Enabled;
+bool cht832xEnabled;
 bool mqttEnabled;
 String mainDelay;
 uint8_t w1Address[6][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023. Yes me, i'd be correct. Nov11'24

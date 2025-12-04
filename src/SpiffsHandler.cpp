@@ -222,7 +222,7 @@ void loadW1SensorConfigFromFile(fs::FS &fs, const char *path, SensorGroupW1 &w1S
     DeserializationError error = deserializeJson(doc, file);
     if (error)
     {
-        Serial.print("Failed to parse JSON: ");
+        Serial.print("Failed to parse JSON for loadW1SensorConfigFromFile. (this might be ok since we are phasing out legacy spiff in favor of remotely fetched json): ");
         Serial.println(error.c_str());
         file.close();
         return;

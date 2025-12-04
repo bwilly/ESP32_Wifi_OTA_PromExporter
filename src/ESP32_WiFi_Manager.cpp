@@ -4,7 +4,7 @@
 // Climate Sensor
 // Prometheus Exporter
 // Copywrite 2022-2023
-// Copyright 2022-2023, 2024
+// Copyright 2022-2023, 2024, 2025
 
 // Unstable Wifi post network/wifi failure
       - plan for fix here is to switch base wifi platform code away from Rui Santos to
@@ -24,7 +24,6 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 
 /** some params can be set via UI. Anything params loaded later as the json web call will supersede UI params [Nov28'25] */
 
-
 /*********
  *
  * Thanks to
@@ -34,8 +33,6 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
   The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 *********/
-
-
 
 // todo Nov25'25
 // why is volt-test trying to send dht?
@@ -82,7 +79,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "MessagePublisher.h"
 #include "ConfigDump.h"
 #include "OtaUpdate.h"
-
+#include "CHT832xSensor.h"
 
 #include "version.h"
 // #include <TelnetStream.h>
@@ -114,8 +111,6 @@ static const size_t REMOTE_JSON_CAPACITY = 4096;
 static StaticJsonDocument<REMOTE_JSON_CAPACITY> g_remoteMergedDoc;
 static StaticJsonDocument<REMOTE_JSON_CAPACITY> g_remoteTmpDoc;
 
-
-
 // BEFORE (something like this)
 // const char* version = APP_VERSION "::" APP_COMMIT_HASH ":: TelnetBridge";
 
@@ -124,8 +119,6 @@ static StaticJsonDocument<REMOTE_JSON_CAPACITY> g_remoteTmpDoc;
 String version = String(APP_VERSION) + "::" +
                  APP_COMMIT_HASH + "::" +
                  APP_BUILD_DATE + ":: TelnetBridge-removed";
-
-
 
 // trying to identify cause of unreliable dht22 readings
 
@@ -153,9 +146,16 @@ float previousHumidity = NAN;
 unsigned long lastPublishTime_tempt = 0;
 unsigned long lastPublishTime_humidity = 0;
 
+// For CHT832x
+float previousCHTTemperature = NAN;
+float previousCHTHumidity = NAN;
+unsigned long lastPublishTime_temptCHT = 0;
+unsigned long lastPublishTime_humidityCHT = 0;
+
 // Local pump config (Nov 25, 2025)
-namespace {
-    constexpr float PUMP_ON_THRESHOLD_AMPS = 1.75f;   // was hardcoded in loop
+namespace
+{
+  constexpr float PUMP_ON_THRESHOLD_AMPS = 1.75f; // was hardcoded in loop
 }
 
 // Globals to store the last published values
@@ -173,6 +173,9 @@ namespace {
 
 // DHT dht(DHTPIN, DHTTYPE);
 // DHT *dht = nullptr; // global pointer declaration
+
+// CHT832x I2C temperature/humidity sensor (full OO)
+CHT832xSensor envSensor(0x44); // default address; todo: externalize Dec3'25
 
 // DS18b20
 // Data wire is plugged into port 15 on the ESP32
@@ -229,7 +232,6 @@ String ledState;
 void setupSpiffsAndConfig();
 void setupStationMode();
 void setupAccessPointMode();
-
 
 void onOTAEnd(bool success)
 {
@@ -327,168 +329,190 @@ void handleWiFiSignalStrength(AsyncWebServerRequest *request)
 
 static bool readFileToString(const char *path, String &out)
 {
-    File f = SPIFFS.open(path, FILE_READ);
-    if (!f) {
-        return false;
-    }
-    out = f.readString();
-    f.close();
-    return true;
+  File f = SPIFFS.open(path, FILE_READ);
+  if (!f)
+  {
+    return false;
+  }
+  out = f.readString();
+  f.close();
+  return true;
 }
 
 static bool writeStringToFile(const char *path, const String &data)
 {
-    File f = SPIFFS.open(path, FILE_WRITE);  // truncates or creates
-    if (!f) {
-        Serial.print(F("writeStringToFile: failed to open "));
-        Serial.print(path);
-        Serial.println(F(" for writing"));
-        return false;
-    }
+  File f = SPIFFS.open(path, FILE_WRITE); // truncates or creates
+  if (!f)
+  {
+    Serial.print(F("writeStringToFile: failed to open "));
+    Serial.print(path);
+    Serial.println(F(" for writing"));
+    return false;
+  }
 
-    size_t written = f.print(data);
-    f.close();
+  size_t written = f.print(data);
+  f.close();
 
-    if (written != data.length()) {
-        Serial.print(F("writeStringToFile: short write to "));
-        Serial.print(path);
-        Serial.print(F(" (expected "));
-        Serial.print(data.length());
-        Serial.print(F(" bytes, wrote "));
-        Serial.print(written);
-        Serial.println(F(")"));
-        return false;
-    }
+  if (written != data.length())
+  {
+    Serial.print(F("writeStringToFile: short write to "));
+    Serial.print(path);
+    Serial.print(F(" (expected "));
+    Serial.print(data.length());
+    Serial.print(F(" bytes, wrote "));
+    Serial.print(written);
+    Serial.println(F(")"));
+    return false;
+  }
 
-    return true;
+  return true;
 }
-
 
 void tryFetchAndApplyRemoteConfig()
 {
-    const String baseUrl = configUrl;
+  const String baseUrl = configUrl;
 
-    if (baseUrl.length() == 0)
+  if (baseUrl.length() == 0)
+  {
+    logger.log("ConfigFetch: base configUrl is empty; cannot fetch remote config\n");
+    return;
+  }
+
+  // Build GLOBAL URL: <base>/global.json
+  String globalUrl = baseUrl;
+  if (!globalUrl.endsWith("/"))
+  {
+    globalUrl += "/";
+  }
+  globalUrl += "global.json"; // <-- make sure this says "global.json", not "global."
+
+  // Build INSTANCE URL: <base>/<locationName>.json
+  String instanceUrl;
+  if (locationName.length() > 0)
+  {
+    instanceUrl = baseUrl;
+    if (!instanceUrl.endsWith("/"))
     {
-        logger.log("ConfigFetch: base configUrl is empty; cannot fetch remote config\n");
-        return;
+      instanceUrl += "/";
     }
+    instanceUrl += locationName + ".json";
+  }
+  else
+  {
+    logger.log("ConfigFetch: locationName is empty; will only attempt GLOBAL config\n");
+  }
 
-    // Build GLOBAL URL: <base>/global.json
-    String globalUrl = baseUrl;
-    if (!globalUrl.endsWith("/")) {
-        globalUrl += "/";
-    }
-    globalUrl += "global.json";   // <-- make sure this says "global.json", not "global."
+  // Load previous remote snapshot
+  String previousRemoteJson;
+  bool hasPreviousRemote = readFileToString("/config-remote.json", previousRemoteJson);
+  if (hasPreviousRemote)
+  {
+    logger.log("ConfigFetch: found previous remote snapshot /config-remote.json\n");
+  }
+  else
+  {
+    logger.log("ConfigFetch: no previous /config-remote.json (first run or missing)\n");
+  }
 
-    // Build INSTANCE URL: <base>/<locationName>.json
-    String instanceUrl;
-    if (locationName.length() > 0)
+  // Clear and prepare merged remote doc
+  g_remoteMergedDoc.clear();
+  JsonObject mergedRoot = g_remoteMergedDoc.to<JsonObject>();
+
+  bool anyRemoteApplied = false;
+  String json;
+
+  auto fetchApplyAndMerge = [&](const String &url, const char *label)
+  {
+    if (url.length() == 0)
     {
-        instanceUrl = baseUrl;
-        if (!instanceUrl.endsWith("/")) {
-            instanceUrl += "/";
-        }
-        instanceUrl += locationName + ".json";
+      return;
     }
-    else
+
+    if (!downloadConfigJson(url, json))
     {
-        logger.log("ConfigFetch: locationName is empty; will only attempt GLOBAL config\n");
+      logger.log(String("ConfigFetch: ") + label +
+                 " config fetch FAILED or not found at " + url + "\n");
+      return;
     }
 
-    // Load previous remote snapshot
-    String previousRemoteJson;
-    bool hasPreviousRemote = readFileToString("/config-remote.json", previousRemoteJson);
-    if (hasPreviousRemote) {
-        logger.log("ConfigFetch: found previous remote snapshot /config-remote.json\n");
-    } else {
-        logger.log("ConfigFetch: no previous /config-remote.json (first run or missing)\n");
+    logger.log(String("ConfigFetch: downloaded ") + label + " config from " + url +
+               " (" + String(json.length()) + " bytes)\n");
+
+    // Apply to in-memory params
+    if (!loadConfigFromJsonString(json))
+    {
+      logger.log(String("ConfigFetch: ") + label + " JSON parse/apply FAILED\n");
+      return;
     }
 
-    // Clear and prepare merged remote doc
-    g_remoteMergedDoc.clear();
-    JsonObject mergedRoot = g_remoteMergedDoc.to<JsonObject>();
+    logger.log(String("ConfigFetch: ") + label + " JSON applied OK\n");
 
-    bool anyRemoteApplied = false;
-    String json;
-
-    auto fetchApplyAndMerge = [&](const String &url, const char *label) {
-        if (url.length() == 0) {
-            return;
-        }
-
-        if (!downloadConfigJson(url, json)) {
-            logger.log(String("ConfigFetch: ") + label +
-                       " config fetch FAILED or not found at " + url + "\n");
-            return;
-        }
-
-        logger.log(String("ConfigFetch: downloaded ") + label + " config from " + url +
-                   " (" + String(json.length()) + " bytes)\n");
-
-        // Apply to in-memory params
-        if (!loadConfigFromJsonString(json)) {
-            logger.log(String("ConfigFetch: ") + label + " JSON parse/apply FAILED\n");
-            return;
-        }
-
-        logger.log(String("ConfigFetch: ") + label + " JSON applied OK\n");
-
-        // Merge into remote snapshot doc
-        g_remoteTmpDoc.clear();
-        DeserializationError err = deserializeJson(g_remoteTmpDoc, json);
-        if (err) {
-            logger.log(String("ConfigFetch: ") + label +
-                       " JSON re-parse FAILED for snapshot merge\n");
-            return;
-        }
-
-        JsonObject src = g_remoteTmpDoc.as<JsonObject>();
-        for (JsonPair kv : src) {
-            mergedRoot[kv.key()] = kv.value();   // instance overrides global on same key
-        }
-
-        anyRemoteApplied = true;
-    };
-
-    // GLOBAL then INSTANCE
-    fetchApplyAndMerge(globalUrl, "GLOBAL");
-    if (instanceUrl.length() > 0) {
-        fetchApplyAndMerge(instanceUrl, "INSTANCE");
+    // Merge into remote snapshot doc
+    g_remoteTmpDoc.clear();
+    DeserializationError err = deserializeJson(g_remoteTmpDoc, json);
+    if (err)
+    {
+      logger.log(String("ConfigFetch: ") + label +
+                 " JSON re-parse FAILED for snapshot merge\n");
+      return;
     }
 
-    if (!anyRemoteApplied) {
-        logger.log("ConfigFetch: no remote configs applied; leaving local config as-is; no reboot\n");
-        return;
+    JsonObject src = g_remoteTmpDoc.as<JsonObject>();
+    for (JsonPair kv : src)
+    {
+      mergedRoot[kv.key()] = kv.value(); // instance overrides global on same key
     }
 
-    // Serialize new remote snapshot
-    String newRemoteJson;
-    serializeJson(g_remoteMergedDoc, newRemoteJson);
+    anyRemoteApplied = true;
+  };
 
-    // Compare snapshots *only on remote config*
-    if (hasPreviousRemote && (newRemoteJson == previousRemoteJson)) {
-        logger.log("ConfigFetch: remote config unchanged vs /config-remote.json; no persist, no reboot\n");
-        return;
-    }
+  // GLOBAL then INSTANCE
+  fetchApplyAndMerge(globalUrl, "GLOBAL");
+  if (instanceUrl.length() > 0)
+  {
+    fetchApplyAndMerge(instanceUrl, "INSTANCE");
+  }
 
-    logger.log("ConfigFetch: remote config changed; persisting and rebooting\n");
+  if (!anyRemoteApplied)
+  {
+    logger.log("ConfigFetch: no remote configs applied; leaving local config as-is; no reboot\n");
+    return;
+  }
 
-    // Persist remote snapshot
-    if (writeStringToFile("/config-remote.json", newRemoteJson)) {
-        logger.log("ConfigFetch: wrote new remote snapshot to /config-remote.json\n");
-    } else {
-        logger.log("ConfigFetch: FAILED to write /config-remote.json\n");
-    }
+  // Serialize new remote snapshot
+  String newRemoteJson;
+  serializeJson(g_remoteMergedDoc, newRemoteJson);
 
-    // Persist full effective config
-    if (saveConfigBackupToFile("/config.json")) {
-        logger.log("ConfigFetch: persisted merged effective config to /config.json; rebooting\n");
-    } else {
-        logger.log("ConfigFetch: FAILED to persist merged config to /config.json; rebooting anyway\n");
-    }
+  // Compare snapshots *only on remote config*
+  if (hasPreviousRemote && (newRemoteJson == previousRemoteJson))
+  {
+    logger.log("ConfigFetch: remote config unchanged vs /config-remote.json; no persist, no reboot\n");
+    return;
+  }
 
-    ESP.restart();
+  logger.log("ConfigFetch: remote config changed; persisting and rebooting\n");
+
+  // Persist remote snapshot
+  if (writeStringToFile("/config-remote.json", newRemoteJson))
+  {
+    logger.log("ConfigFetch: wrote new remote snapshot to /config-remote.json\n");
+  }
+  else
+  {
+    logger.log("ConfigFetch: FAILED to write /config-remote.json\n");
+  }
+
+  // Persist full effective config
+  if (saveConfigBackupToFile("/config.json"))
+  {
+    logger.log("ConfigFetch: persisted merged effective config to /config.json; rebooting\n");
+  }
+  else
+  {
+    logger.log("ConfigFetch: FAILED to persist merged config to /config.json; rebooting anyway\n");
+  }
+
+  ESP.restart();
 }
 
 // Function to initialize the Zabbix agent server
@@ -770,7 +794,9 @@ void populateW1Addresses(uint8_t w1Address[6][8], String w1Name[6], const Sensor
 void setup()
 {
   // Serial port for debugging purposes
+  delay(500);
   Serial.begin(115200);
+  delay(500);
 
   // Enable verbose logging for the WiFi component
   esp_log_level_set("wifi", ESP_LOG_VERBOSE);
@@ -779,7 +805,7 @@ void setup()
   setupSpiffsAndConfig();
 
   // Decide which path: Station vs AP
-  if (initWiFi())   // Station Mode
+  if (initWiFi()) // Station Mode
   {
     setupStationMode();
   }
@@ -884,6 +910,13 @@ void setupStationMode()
     setupACS712();
   }
 
+  // I2C pins for CHT832x
+  Wire.begin(32, 33);
+  if (cht832xEnabled)
+  {
+    envSensor.begin();
+  }
+
   logger.log("set web root /index.html...\n");
   // Route for root / web page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -919,6 +952,36 @@ void setupStationMode()
                   snprintf(buffer, sizeof(buffer), "%.2f", temperature);
                   request->send(200, "text/html", buffer); });
 
+  server.on("/cht/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+    char buffer[32];
+
+    float chtTemp = NAN;
+    float chtHum  = NAN;
+
+    if (envSensor.read(chtTemp, chtHum)) {
+        snprintf(buffer, sizeof(buffer), "%.2f", chtTemp);
+        request->send(200, "text/html", buffer);
+    } else {
+        request->send(500, "text/plain", "CHT read failed");
+    } });
+
+  server.on("/cht/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
+{
+    char buffer[32];
+
+    float chtTemp = NAN;
+    float chtHum  = NAN;
+
+    if (envSensor.read(chtTemp, chtHum)) {
+        snprintf(buffer, sizeof(buffer), "%.2f", chtHum);
+        request->send(200, "text/html", buffer);
+    } else {
+        request->send(500, "text/plain", "CHT read failed");
+    }
+});
+
+
   // copy/paste from setup section for AP -- changing URL path
   // todo: consolidate this copied code
   server.on("/manage", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -938,16 +1001,16 @@ void setupStationMode()
   // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
   server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-                temptSensor.requestTemperatures();
-                TemperatureReading *readings = temptSensor.getTemperatureReadings();
+              temptSensor.requestTemperatures();
+              TemperatureReading *readings = temptSensor.getTemperatureReadings();
 
-                // Use the readings to send a response, assume SendHTML can handle TemperatureReading array
-                request->send(200, "text/html", SendHTML(readings, MAX_READINGS));
+              // Use the readings to send a response, assume SendHTML can handle TemperatureReading array
+              request->send(200, "text/html", SendHTML(readings, MAX_READINGS));
 
-                // sensors.requestTemperatures();
-                // request->send(200, "text/html", SendHTML(sensors.getTempC(w1Address[0]), sensors.getTempC(w1Address[1]), sensors.getTempC(w1Address[2]))); });
-                // request->send(200, "text/html", SendHTMLxxx());
-              });
+              // sensors.requestTemperatures();
+              // request->send(200, "text/html", SendHTML(sensors.getTempC(w1Address[0]), sensors.getTempC(w1Address[1]), sensors.getTempC(w1Address[2]))); });
+              // request->send(200, "text/html", SendHTMLxxx());
+            });
 
   // todo: find out why some readings provide -127
   server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -966,13 +1029,14 @@ void setupStationMode()
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
   // i believe this is the in-mem representation
-  server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
       String json = buildConfigJsonFlat();
-      request->send(200, "application/json", json);
-  });
+      request->send(200, "application/json", json); });
 
   // View the locally stored working config: /config.json
-  server.on("/config/local", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/config/local", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
       const char *path = "/config.json";
 
       if (!SPIFFS.exists(path)) {
@@ -981,11 +1045,11 @@ void setupStationMode()
       }
 
       // Stream directly from SPIFFS without loading the whole file into RAM
-      request->send(SPIFFS, path, "application/json");
-  });
+      request->send(SPIFFS, path, "application/json"); });
 
   // View the last downloaded remote snapshot: /config-remote.json
-  server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
       const char *path = "/config-remote.json";
 
       if (!SPIFFS.exists(path)) {
@@ -993,10 +1057,10 @@ void setupStationMode()
           return;
       }
 
-      request->send(SPIFFS, path, "application/json");
-  });
+      request->send(SPIFFS, path, "application/json"); });
 
-  server.on("/ota/run", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/ota/run", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
 
       auto it = paramToVariableMap.find("ota-url");
       if (it == paramToVariableMap.end() || it->second == nullptr) {
@@ -1022,9 +1086,7 @@ void setupStationMode()
 
       request->send(200, "text/plain",
                     "OTA scheduled from " + fwUrl +
-                    "\nDevice will reboot if update succeeds.");
-  });
-
+                    "\nDevice will reboot if update succeeds."); });
 
   // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
@@ -1085,13 +1147,16 @@ void setupAccessPointMode()
   // Build base SSID (without prefix)
   String base;
 
-  if (locationName.length() > 0) {
+  if (locationName.length() > 0)
+  {
     // Use configured location name
     base = locationName;
-  } else {
+  }
+  else
+  {
     // Build fallback with unique suffix from MAC
     uint64_t mac = ESP.getEfuseMac();
-    uint32_t suffix = (uint32_t)(mac & 0xFFFFFF);  // last 3 bytes
+    uint32_t suffix = (uint32_t)(mac & 0xFFFFFF); // last 3 bytes
 
     char buf[32];
     snprintf(buf, sizeof(buf), "%06X", suffix);
@@ -1102,7 +1167,8 @@ void setupAccessPointMode()
   String apSsid = "srl-sesp-" + base;
 
   // Guarantee SSID ≤ 31 chars (Wi-Fi limit)
-  if (apSsid.length() > 31) {
+  if (apSsid.length() > 31)
+  {
     apSsid = apSsid.substring(0, 31);
   }
 
@@ -1139,9 +1205,6 @@ void setupAccessPointMode()
   logger.log("Starting web server...\n");
   server.begin();
 }
-
-
-
 
 void reconnectMQ()
 {
@@ -1201,18 +1264,126 @@ float calculatePercentageChange(float oldValue, float newValue)
   return abs((newValue - oldValue) / oldValue) * 100.0f;
 }
 
+void maybePublishEnvToMqtt(
+    const char *sourceName,
+    float currentTemperature,
+    float currentHumidity,
+    float &previousTemperatureRef,
+    float &previousHumidityRef,
+    unsigned long &lastPublishTimeTempRef,
+    unsigned long &lastPublishTimeHumRef)
+{
+  unsigned long now = millis();
+
+  float tempChange = calculatePercentageChange(previousTemperatureRef, currentTemperature);
+  float humidityChange = calculatePercentageChange(previousHumidityRef, currentHumidity);
+
+  unsigned long timeSinceLastPublishTemp = now - lastPublishTimeTempRef;
+  unsigned long timeSinceLastPublishHum = now - lastPublishTimeHumRef;
+
+  bool shouldPublishTemp = false;
+  bool shouldPublishHum = false;
+
+  if (tempChange >= THRESHOLD_TEMPERATURE_PERCENTAGE)
+  {
+    shouldPublishTemp = true;
+  }
+  if (humidityChange >= THRESHOLD_HUMIDITY_PERCENTAGE)
+  {
+    shouldPublishHum = true;
+  }
+
+  logger.log(sourceName);
+  logger.log(" Temperature changed from ");
+  logger.log(previousTemperatureRef);
+  logger.log(" to ");
+  logger.log(currentTemperature);
+  logger.log(". Percentage change: ");
+  logger.log(tempChange);
+  logger.log("\n");
+
+  logger.log(sourceName);
+  logger.log(" Humidity changed from ");
+  logger.log(previousHumidityRef);
+  logger.log(" to ");
+  logger.log(currentHumidity);
+  logger.log(". Percentage change: ");
+  logger.log(humidityChange);
+  logger.log("\n");
+
+  if (timeSinceLastPublishTemp >= PUBLISH_INTERVAL)
+  {
+    shouldPublishTemp = true;
+    logger.log(sourceName);
+    logger.log(": time interval since last temp publish exceeded; publishing.\n");
+  }
+  else
+  {
+    logger.log(sourceName);
+    logger.log(": time to next temp publish: ");
+    logger.log((PUBLISH_INTERVAL - timeSinceLastPublishTemp) / 1000);
+    logger.log(" seconds.\n");
+  }
+
+  if (timeSinceLastPublishHum >= PUBLISH_INTERVAL)
+  {
+    shouldPublishHum = true;
+    logger.log(sourceName);
+    logger.log(": time interval since last humidity publish exceeded; publishing.\n");
+  }
+  else
+  {
+    logger.log(sourceName);
+    logger.log(": time to next humidity publish: ");
+    logger.log((PUBLISH_INTERVAL - timeSinceLastPublishHum) / 1000);
+    logger.log(" seconds.\n");
+  }
+
+  if (shouldPublishTemp)
+  {
+    logger.log(sourceName);
+    logger.log(": publishTemperature...\n");
+    MessagePublisher::publishTemperature(mqClient, currentTemperature, locationName);
+    previousTemperatureRef = currentTemperature;
+    lastPublishTimeTempRef = now;
+  }
+  else
+  {
+    logger.log(sourceName);
+    logger.log(": skipping publish temperature.\n");
+  }
+
+  if (shouldPublishHum)
+  {
+    logger.log(sourceName);
+    logger.log(": publishHumidity...\n");
+    MessagePublisher::publishHumidity(mqClient, currentHumidity, locationName);
+    previousHumidityRef = currentHumidity;
+    lastPublishTimeHumRef = now;
+  }
+  else
+  {
+    logger.log(sourceName);
+    logger.log(": skipping publish humidity.\n");
+  }
+
+  logger.log("\n");
+}
+
 void loop()
 {
   unsigned long currentMillis = millis();
 
   // Defered OTA execution from main loop (not async_tcp task)
-  if (g_otaRequested) {
-    g_otaRequested = false;  // clear first to avoid reentry if OTA fails
+  if (g_otaRequested)
+  {
+    g_otaRequested = false; // clear first to avoid reentry if OTA fails
 
     logger.log("OTA: executing deferred OTA from loop using URL = " + g_otaUrl + "\n");
 
     bool ok = performHttpOta(g_otaUrl);
-    if (!ok) {
+    if (!ok)
+    {
       logger.log("OTA: performHttpOta() failed; no reboot will occur\n");
     }
 
@@ -1270,100 +1441,39 @@ void loop()
       float currentTemperature = readDHTTemperature();
       float currentHumidity = readDHTHumidity();
 
-      // Calculate the percentage change from the previous values
-      float tempChange = calculatePercentageChange(previousTemperature, currentTemperature);
-      float humidityChange = calculatePercentageChange(previousHumidity, currentHumidity);
+      maybePublishEnvToMqtt(
+          "DHT",
+          currentTemperature,
+          currentHumidity,
+          previousTemperature,
+          previousHumidity,
+          lastPublishTime_tempt,
+          lastPublishTime_humidity);
+    }
 
-      // Checking current time
-      // unsigned long currentMillis = millis();
+    // Dec3'25
+    if (cht832xEnabled)
+    {
+      float chtTemp = NAN;
+      float chtHum = NAN;
 
-      unsigned long timeSinceLastPublishTempt = currentMillis - lastPublishTime_tempt;
-      unsigned long timeSinceLastPublishHumidity = currentMillis - lastPublishTime_humidity;
-
-      bool shouldPublishTempt = true;    // false;
-      bool shouldPublishHumidity = true; // false;
-
-      // Check temperature change criteria
-      if (tempChange >= THRESHOLD_TEMPERATURE_PERCENTAGE)
+      if (envSensor.read(chtTemp, chtHum))
       {
-        shouldPublishTempt = true;
-      }
-      logger.log("Temperature changed from ");
-      logger.log(previousTemperature);
-      logger.log(" to ");
-      logger.log(currentTemperature);
-      logger.log(". Percentage change: ");
-      logger.log(tempChange);
-      logger.log("\n");
-
-      // Check humidity change criteria
-      if (humidityChange >= THRESHOLD_HUMIDITY_PERCENTAGE)
-      {
-        shouldPublishHumidity = true;
-      }
-      logger.log("Humidity changed from ");
-      logger.log(previousHumidity);
-      logger.log(" to ");
-      logger.log(currentHumidity);
-      logger.log(". Percentage change: ");
-      logger.log(humidityChange);
-      logger.log("\n");
-
-      // Check time interval criteria for temperature
-      if (timeSinceLastPublishTempt >= PUBLISH_INTERVAL)
-      {
-        shouldPublishTempt = true;
-        logger.log("Time interval since last temperature publish is greater than the defined threshold. Publishing...\n");
+        maybePublishEnvToMqtt(
+            "CHT832x",
+            chtTemp,
+            chtHum,
+            previousCHTTemperature,
+            previousCHTHumidity,
+            lastPublishTime_temptCHT,
+            lastPublishTime_humidityCHT);
       }
       else
       {
-        logger.log("Time to next threshold publish for temperature: ");
-        logger.log((PUBLISH_INTERVAL - timeSinceLastPublishTempt) / 1000);
-        logger.log(" seconds.\n");
+        logger.log("CHT832xSensor: read failed; skipping publish this cycle\n");
       }
-
-      // Check time interval criteria for humidity
-      if (timeSinceLastPublishHumidity >= PUBLISH_INTERVAL)
-      {
-        shouldPublishHumidity = true;
-        logger.log("Time interval since last humidity publish is greater than the defined threshold. Publishing...\n");
-      }
-      else
-      {
-        logger.log("Time to next threshold publish for humidity: ");
-        logger.log((PUBLISH_INTERVAL - timeSinceLastPublishHumidity) / 1000);
-        logger.log(" seconds.\n");
-      }
-
-      // Publishing based on the individual checks
-      if (shouldPublishTempt)
-      {
-        logger.log("publishTemperature...\n");
-        MessagePublisher::publishTemperature(mqClient, currentTemperature, locationName);
-
-        // Update the previous values after publishing
-        previousTemperature = currentTemperature;
-        lastPublishTime_tempt = currentMillis;
-      }
-      else
-      {
-        logger.log("Skipping publish temperature.\n");
-      }
-
-      if (shouldPublishHumidity)
-      {
-        logger.log("publishHumidity...\n");
-        MessagePublisher::publishHumidity(mqClient, currentHumidity, locationName);
-
-        // Update the previous values after publishing
-        previousHumidity = currentHumidity;
-        lastPublishTime_humidity = currentMillis;
-      }
-      else
-      {
-        logger.log("Skipping publish humidity.\n");
-      }
-      logger.log("\n");
+    } else {
+      logger.log("CHT832xSensor not enabled. \n");
     }
   }
 

@@ -11,7 +11,7 @@ std::vector<ParamMetadata> paramList = {
     {"pass", makePath(PARAM_WIFI_PASS), ParamMetadata::STRING},
     {"location", makePath(PARAM_LOCATION), ParamMetadata::STRING},
     {"config-url", makePath(PARAM_CONFIG_URL), ParamMetadata::STRING},
-    {"config-url", makePath(PARAM_OTA_URL), ParamMetadata::STRING},    
+    {"ota-url", makePath(PARAM_OTA_URL), ParamMetadata::STRING},    
     {"pinDht", makePath(PARAM_PIN_DHT), ParamMetadata::STRING},
     {"pinAcs", makePath(PARAM_PIN_ACS), ParamMetadata::STRING},
     {"mqtt-server", makePath(PARAM_MQTT_SERVER), ParamMetadata::STRING},
@@ -33,6 +33,7 @@ std::vector<ParamMetadata> paramList = {
     {"enableW1", makePath(PARAM_ENABLE_W1), ParamMetadata::BOOLEAN},
     {"enableDHT", makePath(PARAM_ENABLE_DHT), ParamMetadata::BOOLEAN},
     {"enableAcs712", makePath(PARAM_ENABLE_ACS), ParamMetadata::BOOLEAN},
+    {"enableCHT832x", makePath(PARAM_ENABLE_CHT832x), ParamMetadata::BOOLEAN},
     {"enableMQTT", makePath(PARAM_ENABLE_MQTT), ParamMetadata::BOOLEAN}};
 // {"w1NameValue", makePath("w1"), ParamMetadata::STRING}}; // this one is a work-in-progress. It doesn't
 // really belong here, but I am looking for a way to combine form fields into a single w1 spiff file
