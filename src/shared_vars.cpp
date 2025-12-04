@@ -79,6 +79,8 @@ std::map<String, bool *> paramToBoolMap = {
     {"enableDHT", &dhtEnabled},
     {"enableAcs712", &acs712Enabled},
     // {"mqttEnabled", &mqttEnabled}};
-    {"enableMQTT", &mqttEnabled}};
+    {"enableMQTT", &mqttEnabled},
+    {"enableCHT832x", &cht832xEnabled}
+};
 
 SensorGroupW1 w1Sensors;
