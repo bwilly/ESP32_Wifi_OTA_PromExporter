@@ -32,7 +32,7 @@ static String bytesToHexString(const uint8_t *data, size_t len)
 // - String params via paramToVariableMap
 // - Bool params via paramToBoolMap
 // - W1 sensor addresses/names via w1Address[] and w1Name[]
-String buildConfigJsonFlat()
+String buildEffectiveConfigJson()
 {
     StaticJsonDocument<CONFIG_JSON_CAPACITY> doc;
 
@@ -91,9 +91,10 @@ String buildConfigJsonFlat()
 
 // Save the current in-memory config JSON to a file in SPIFFS.
 // Default path is "/config-backup.json".
-bool saveConfigBackupToFile(const char *path)
+// bool saveConfigBackupToFile(const char *path)
+bool saveEffectiveCacheToFile(const char* path)
 {
-    String json = buildConfigJsonFlat();
+    String json = buildEffectiveConfigJson();
 
     File f = SPIFFS.open(path, FILE_WRITE);  // truncates or creates
     if (!f) {
@@ -120,8 +121,3 @@ bool saveConfigBackupToFile(const char *path)
     return true;
 }
 
-// Convenience wrapper for saving the "main" config to /config.json
-bool saveCurrentConfigToMainFile(const char *path)
-{
-    return saveConfigBackupToFile(path);
-}

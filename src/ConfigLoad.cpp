@@ -188,7 +188,8 @@ bool loadConfigFromJsonString(const String &json)
     return applyConfigJsonDoc(doc);
 }
 
-bool loadConfigFromJsonFile(const char *path)
+// bool loadConfigFromJsonFile(const char *path)
+bool loadEffectiveCacheFromFile(const char* path)
 {
     if (!SPIFFS.begin(true)) {
         Serial.println(F("loadConfigFromJsonFile: SPIFFS.begin() failed\n"));

@@ -503,13 +503,13 @@ void tryFetchAndApplyRemoteConfig()
   }
 
   // Persist full effective config
-  if (saveConfigBackupToFile("/config.json"))
+  if (saveEffectiveCacheToFile(EFFECTIVE_CACHE_PATH))
   {
-    logger.log("ConfigFetch: persisted merged effective config to /config.json; rebooting\n");
+    logger.log("ConfigFetch: persisted merged effective config EFFECTIVE_CACHE_PATH; rebooting\n");
   }
   else
   {
-    logger.log("ConfigFetch: FAILED to persist merged config to /config.json; rebooting anyway\n");
+    logger.log("ConfigFetch: FAILED to persist merged config to EFFECTIVE_CACHE_PATH; rebooting anyway\n");
   }
 
   ESP.restart();
@@ -823,13 +823,13 @@ void setupSpiffsAndConfig()
   // Try to load a flat JSON config from /config.json.
   // If present and valid, it will override the legacy per-param SPIFFS values
   // that loadPersistedValues() just populated.
-  if (loadConfigFromJsonFile("/config.json"))
+  if (loadEffectiveCacheFromFile(EFFECTIVE_CACHE_PATH))
   {
-    Serial.println("ConfigLoad: /config.json loaded and applied (overrides per-param SPIFFS files).");
+    Serial.println("ConfigLoad: EFFECTIVE_CACHE_PATH = '/config.effective.cache.json'loaded and applied (overrides per-param SPIFFS files).");
   }
   else
   {
-    Serial.println("ConfigLoad: no /config.json (or parse error); using values from loadPersistedValues().");
+    Serial.println("ConfigLoad: no EFFECTIVE_CACHE_PATH = '/config.effective.cache.json' (or parse error); using values from loadPersistedValues() which are the params from UI.");
   }
 
   // i am commenting out below b/c i don't believe it has purpose (bwilly)
@@ -1028,24 +1028,18 @@ void setupStationMode()
 
                 request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
 
-  // i believe this is the in-mem representation
-  server.on("/exportconfig", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-      String json = buildConfigJsonFlat();
-      request->send(200, "application/json", json); });
 
-  // View the locally stored working config: /config.json
-  server.on("/config/local", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-      const char *path = "/config.json";
+  // View the locally stored working config
+  server.on("/config/effective-cache", HTTP_GET, [](AsyncWebServerRequest *request) {
+    const char *path = EFFECTIVE_CACHE_PATH;
 
-      if (!SPIFFS.exists(path)) {
-          request->send(404, "text/plain", "No /config.json stored");
-          return;
-      }
+    if (!SPIFFS.exists(path)) {
+        request->send(404, "text/plain", "No effective cache file stored");
+        return;   
+    }
 
-      // Stream directly from SPIFFS without loading the whole file into RAM
-      request->send(SPIFFS, path, "application/json"); });
+    request->send(SPIFFS, path, "application/json");
+});
 
   // View the last downloaded remote snapshot: /config-remote.json
   server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request)
