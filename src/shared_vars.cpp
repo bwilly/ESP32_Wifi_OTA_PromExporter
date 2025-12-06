@@ -33,6 +33,7 @@ const char *PARAM_ENABLE_W1 = "enableW1";
 const char *PARAM_ENABLE_DHT = "enableDHT";
 const char *PARAM_ENABLE_ACS = "enableCHT832x";
 const char *PARAM_ENABLE_CHT832x = "enableAcs712";
+const char *PARAM_ENABLE_SCT = "enableSct";
 
 const char *PARAM_ENABLE_MQTT = "enableMQTT";
 
@@ -49,6 +50,7 @@ String mqttPort;
 bool w1Enabled;
 bool dhtEnabled;
 bool acs712Enabled;
+bool sctEnabled;
 bool cht832xEnabled;
 bool mqttEnabled;
 String mainDelay;
@@ -78,9 +80,9 @@ std::map<String, bool *> paramToBoolMap = {
     {"enableW1", &w1Enabled},
     {"enableDHT", &dhtEnabled},
     {"enableAcs712", &acs712Enabled},
-    // {"mqttEnabled", &mqttEnabled}};
     {"enableMQTT", &mqttEnabled},
-    {"enableCHT832x", &cht832xEnabled}
+    {"enableCHT832x", &cht832xEnabled},
+    {"enableSct", &sctEnabled}
 };
 
 SensorGroupW1 w1Sensors;

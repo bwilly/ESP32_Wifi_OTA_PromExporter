@@ -37,6 +37,7 @@ extern const char *PARAM_ENABLE_W1;
 extern const char *PARAM_ENABLE_DHT;  
 extern const char *PARAM_ENABLE_ACS;  
 extern const char *PARAM_ENABLE_CHT832x;  
+extern const char *PARAM_ENABLE_SCT;  
 extern const char *PARAM_ENABLE_MQTT; 
 
 
@@ -55,6 +56,7 @@ extern bool dhtEnabled;
 extern bool mqttEnabled;
 extern bool acs712Enabled;
 extern bool cht832xEnabled;
+extern bool sctEnabled;
 
 extern String mainDelay;
 extern uint8_t w1Address[6][8]; // todo:remove post refactor

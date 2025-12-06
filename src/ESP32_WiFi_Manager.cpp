@@ -80,6 +80,7 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "ConfigDump.h"
 #include "OtaUpdate.h"
 #include "CHT832xSensor.h"
+#include "SCT_SRL.h"
 
 #include "version.h"
 // #include <TelnetStream.h>
@@ -176,6 +177,14 @@ namespace
 
 // CHT832x I2C temperature/humidity sensor (full OO)
 CHT832xSensor envSensor(0x44); // default address; todo: externalize Dec3'25
+
+// SctSensor sctSensor(32, 15.0f);  // default 15A;
+// choose the ADC1 pin you're using (example)
+static const int PIN_SCT = 32;
+// choose the rating (10, 15, or 20A version)
+static const float SCT_RATED_AMPS = 15.0f;
+// your OO instance (just like envSensor)
+SctSensor sctSensor(PIN_SCT, SCT_RATED_AMPS);
 
 // DS18b20
 // Data wire is plugged into port 15 on the ESP32
@@ -911,10 +920,15 @@ void setupStationMode()
   }
 
   // I2C pins for CHT832x
-  Wire.begin(32, 33);
+  Wire.begin(32, 33); // why is this here instead of inside the instantiation of the CHT sensor? Dec6'25
   if (cht832xEnabled)
   {
     envSensor.begin();
+  }
+
+  
+  if(sctEnabled) {
+    sctSensor.begin();
   }
 
   logger.log("set web root /index.html...\n");
@@ -1468,6 +1482,11 @@ void loop()
       }
     } else {
       logger.log("CHT832xSensor not enabled. \n");
+    }
+
+    if(sctEnabled) {
+          float amps = sctSensor.readCurrentACRms();
+          
     }
   }
 
