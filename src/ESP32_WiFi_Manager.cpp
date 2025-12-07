@@ -1096,7 +1096,24 @@ void setupStationMode()
                     "OTA scheduled from " + fwUrl +
                     "\nDevice will reboot if update succeeds."); });
 
-  // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
+  server.on("/config/cache/clear", HTTP_GET, [](AsyncWebServerRequest *request) {
+    bool ok = clearConfigJsonCache(SPIFFS);
+    if (ok) {
+        request->send(200, "text/plain", "Config JSON cache cleared. It will not be used until remote config repopulates it.");
+    } else {
+        request->send(500, "text/plain", "Failed to clear config JSON cache.");
+    }
+});
+
+server.on("/device/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Restarting...");
+    delay(300);   // allow response to flush
+    ESP.restart();
+});
+
+
+  
+                    // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
             {
       handlePostParameters(request);
@@ -1195,6 +1212,22 @@ void setupAccessPointMode()
   }
   // Web Server Root URL
   Serial.print("Setting web root path to /wifimanager.html...\n");
+
+    server.on("/config/cache/clear", HTTP_GET, [](AsyncWebServerRequest *request) {
+    bool ok = clearConfigJsonCache(SPIFFS);
+    if (ok) {
+        request->send(200, "text/plain", "Config JSON cache cleared. It will not be used until remote config repopulates it.");
+    } else {
+        request->send(500, "text/plain", "Failed to clear config JSON cache.");
+    }
+});
+
+server.on("/device/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Restarting...");
+    delay(300);   // allow response to flush
+    ESP.restart();
+});
+
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
@@ -1486,6 +1519,9 @@ void loop()
 
     if(sctEnabled) {
           float amps = sctSensor.readCurrentACRms();
+          logger.logf("iot.sct.current %.3fA pin=%d rated=%.0f\n",
+            amps, PIN_SCT, SCT_RATED_AMPS);
+
           
     }
   }

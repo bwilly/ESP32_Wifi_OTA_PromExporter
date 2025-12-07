@@ -5,6 +5,8 @@
 
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
+#include <FS.h>
+
 
 #include "shared_vars.h"   // paramToVariableMap, paramToBoolMap, w1Address, w1Name, W1_NUM_BYTES
 
@@ -215,3 +217,20 @@ bool loadEffectiveCacheFromFile(const char* path)
 
     return applyConfigJsonDoc(doc);
 }
+
+bool clearConfigJsonCache(fs::FS &fs)
+{
+    if (!fs.exists(EFFECTIVE_CACHE_PATH)) {
+        Serial.println("clearConfigJsonCache: no cache file to remove");
+        return true;  // nothing to do, but state is as desired
+    }
+
+    if (fs.remove(EFFECTIVE_CACHE_PATH)) {
+        Serial.println("clearConfigJsonCache: cache file removed");
+        return true;
+    } else {
+        Serial.println("clearConfigJsonCache: failed to remove cache file");
+        return false;
+    }
+}
+
