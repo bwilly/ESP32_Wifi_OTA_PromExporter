@@ -29,6 +29,7 @@ public:
     void begin();                 // Initializes the sensor
     float readCurrentACRms();     // Reads AC RMS current in amps
     void serialOutInfo();         // Prints RMS current to Serial
+    void serialOutAdcDebug();     // Prints raw ADC bias (counts + volts)
 
     // Runtime configuration
     void setRatedAmps(float ratedAmps)   { _ratedAmps = ratedAmps; }

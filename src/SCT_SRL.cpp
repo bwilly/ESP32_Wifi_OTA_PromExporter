@@ -90,5 +90,33 @@ void SctSensor::serialOutInfo() {
     Serial.println(" A RMS");
 }
 
+// Debug helper: show the DC bias at the ADC pin in counts and volts.
+void SctSensor::serialOutAdcDebug()
+{
+    const int samples = 200;
+    long sum = 0;
+
+    for (int i = 0; i < samples; ++i) {
+        int raw = analogRead(_pinAdc);
+        sum += raw;
+        delayMicroseconds(100);
+    }
+
+    float avgCounts = static_cast<float>(sum) / samples;
+
+    // Convert counts -> volts using the same constants as RMS code
+    float voltsPerCount = ADC_MAX_VOLTAGE / ADC_RESOLUTION;
+    float vBias = avgCounts * voltsPerCount;
+
+    Serial.print("SCT ADC bias debug: pin=");
+    Serial.print(_pinAdc);
+    Serial.print(" avg=");
+    Serial.print(avgCounts, 1);
+    Serial.print(" counts, ");
+    Serial.print(vBias, 3);
+    Serial.println(" V");
+}
+
+
 
 

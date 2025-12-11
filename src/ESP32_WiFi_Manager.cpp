@@ -183,6 +183,11 @@ CHT832xSensor envSensor(0x44); // default address; todo: externalize Dec3'25
 static const int PIN_SCT = 32;
 // choose the rating (10, 15, or 20A version)
 static const float SCT_RATED_AMPS = 15.0f;
+static const float FEEDPUMP_ON_THRESHOLD_AMPS = 0.5f;
+
+// SCT pump state tracking
+static bool sctFirstRun      = true;
+static bool sctLastPumpState = false;
 // your OO instance (just like envSensor)
 SctSensor sctSensor(PIN_SCT, SCT_RATED_AMPS);
 
@@ -920,7 +925,7 @@ void setupStationMode()
   }
 
   // I2C pins for CHT832x
-  Wire.begin(32, 33); // why is this here instead of inside the instantiation of the CHT sensor? Dec6'25
+  Wire.begin(32, 33); // todo:externalize: why is this here instead of inside the instantiation of the CHT sensor? Dec6'25 
   if (cht832xEnabled)
   {
     envSensor.begin();
@@ -1513,18 +1518,39 @@ void loop()
       {
         logger.log("CHT832xSensor: read failed; skipping publish this cycle\n");
       }
-    } else {
-      logger.log("CHT832xSensor not enabled. \n");
-    }
+    } 
 
     if(sctEnabled) {
           float amps = sctSensor.readCurrentACRms();
           logger.logf("iot.sct.current %.3fA pin=%d rated=%.0f\n",
-            amps, PIN_SCT, SCT_RATED_AMPS);
-
-          
+            amps, PIN_SCT, SCT_RATED_AMPS);        
+          sctSensor.serialOutAdcDebug(); // for debug only  
     }
   }
+
+if (sctEnabled)
+{
+    float amps = fabsf(sctSensor.readCurrentACRms());
+
+    bool pumpState = (amps > FEEDPUMP_ON_THRESHOLD_AMPS);
+
+    if (sctFirstRun || pumpState != sctLastPumpState || pumpState)
+    {
+        MessagePublisher::publishPumpState(
+            mqClient,
+            pumpState,
+            amps,
+            "feed-pump"
+        );
+
+        sctLastPumpState = pumpState;
+        sctFirstRun = false;
+    }
+}
+
+
+
+
 
   if (w1Enabled)
   {
