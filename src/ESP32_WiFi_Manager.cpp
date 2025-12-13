@@ -88,8 +88,17 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 // #include <AsyncTelnetSerial.h>
 #include <AsyncTCP.h> // dependency for the async streams
 
+<<<<<<< HEAD
 // #include <BufferedLogger.h>
 #include "TelnetBridge.h"
+=======
+#include <BufferedLogger.h>
+#include "TelnetBridge.h" // stopped using this due to comppile conflcot in nov'25. would liek its feature returned for remote log monitor.
+
+#include "ConfigModel.h"
+#include "ConfigStorage.h"
+
+>>>>>>> d9d3f10 (compiles but mqtt might not be effective)
 
 #include "Logger.h"
 
@@ -860,6 +869,17 @@ void setupSpiffsAndConfig()
     Serial.println("ConfigLoad: no EFFECTIVE_CACHE_PATH = '/config.effective.cache.json' (or parse error); using values from loadPersistedValues() which are the params from UI.");
   }
 
+    // NEW: load modular AppConfig from /config.json (if present, new schema)
+  if (ConfigStorage::loadAppConfigFromFile("/config.json", gConfig))
+  {
+    logger.log("AppConfig: loaded from /config.json into gConfig (modular JSON)\n");
+  }
+  else
+  {
+    logger.log("AppConfig: no modular /config.json or parse error; using defaults for gConfig\n");
+  }
+
+
   // i am commenting out below b/c i don't believe it has purpose (bwilly)
   // Set GPIO 2 as an OUTPUT
   // Serial.println("ledPin mode and digitalWrite...");
@@ -879,7 +899,7 @@ void setupSpiffsAndConfig()
   // Load parameters from SPIFFS using paramList
   // replaces commented out code directly above
   for (const auto &paramMetadata : paramList)
-  {
+  { // todo:delete this as legacy code since early json config from dev'25, no?
     if (paramMetadata.name.startsWith(PARAM_W1_1_NAME)) // just match the first w1 as the delegated loaders will load them all
     {
       // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
@@ -1157,25 +1177,44 @@ server.on("/device/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
 
   server.begin();
 
-  // Set MQTT server
-  logger.log("Setting MQTT server and port...\n");
-  logger.log(*paramToVariableMap["mqtt-server"]);
-  logger.log(*paramToVariableMap["mqtt-port"]);
-  logger.log("\n");
+  // // Set MQTT server
+  // logger.log("Setting MQTT server and port...\n");
+  // logger.log(*paramToVariableMap["mqtt-server"]);
+  // logger.log(*paramToVariableMap["mqtt-port"]);
+  // logger.log("\n");
 
-  if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
-      paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
-  {
+  // if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
+  //     paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
+  // {
 
-    const char *serverName = paramToVariableMap["mqtt-server"]->c_str();
-    int port = paramToVariableMap["mqtt-port"]->toInt();
+  //   const char *serverName = paramToVariableMap["mqtt-server"]->c_str();
+  //   int port = paramToVariableMap["mqtt-port"]->toInt();
 
-    mqClient.setServer(serverName, port);
-  }
-  else
-  {
-    logger.log("Error setting MQTT from params.\n");
-  }
+  //   mqClient.setServer(serverName, port);
+  // }
+  // else
+  // {
+  //   logger.log("Error setting MQTT from params.\n");
+  // }
+
+    // Set MQTT server using new AppConfig model (JSON-first, no legacy bridge)
+    logger.log("Setting MQTT server and port from gConfig.mqtt...\n");
+    logger.log(gConfig.mqtt.server);
+    logger.log(" : ");
+    logger.log(gConfig.mqtt.port);
+    logger.log("\n");
+
+    if (gConfig.mqtt.server.length() > 0 && gConfig.mqtt.port > 0)
+    {
+      mqClient.setServer(gConfig.mqtt.server.c_str(), gConfig.mqtt.port);
+    }
+    else
+    {
+      logger.log("Error: MQTT config missing server or port in gConfig.mqtt; MQTT will be disabled\n");
+    }
+
+
+
   logger.log("\nEntry setup loop complete.");
 }
 
@@ -1486,7 +1525,7 @@ void loop()
     previous_time = current_time;
   }
 
-  if (mqttEnabled)
+  if (gConfig.mqtt.enabled)
   {
 
     reconnectMQ();
