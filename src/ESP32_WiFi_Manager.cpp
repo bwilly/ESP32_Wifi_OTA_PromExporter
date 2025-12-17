@@ -107,6 +107,10 @@ Logger logger;
 constexpr uint16_t SRL_TELNET_PORT = 23;
 constexpr const char* SRL_TELNET_PASSWORD = "saltmeadow";
 
+constexpr const char* AP_SSID_PREFIX = "srl-sesp-";
+constexpr const char* AP_PASSWORD = "saltmeadow";  // >= 8 chars
+
+
 
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "sesp-"
@@ -1172,25 +1176,6 @@ server.on("/device/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
 
   server.begin();
 
-  // // Set MQTT server
-  // logger.log("Setting MQTT server and port...\n");
-  // logger.log(*paramToVariableMap["mqtt-server"]);
-  // logger.log(*paramToVariableMap["mqtt-port"]);
-  // logger.log("\n");
-
-  // if (paramToVariableMap.find("mqtt-server") != paramToVariableMap.end() &&
-  //     paramToVariableMap.find("mqtt-port") != paramToVariableMap.end())
-  // {
-
-  //   const char *serverName = paramToVariableMap["mqtt-server"]->c_str();
-  //   int port = paramToVariableMap["mqtt-port"]->toInt();
-
-  //   mqClient.setServer(serverName, port);
-  // }
-  // else
-  // {
-  //   logger.log("Error setting MQTT from params.\n");
-  // }
 
     // Set MQTT server using new AppConfig model (JSON-first, no legacy bridge)
     logger.log("Setting MQTT server and port from gConfig.mqtt...\n");
@@ -1242,15 +1227,11 @@ void setupAccessPointMode()
   }
 
   // Final SSID: ALWAYS prefixed with "sesp-"
-  String apSsid = "srl-sesp-" + base;
-
   // Guarantee SSID ≤ 31 chars (Wi-Fi limit)
-  if (apSsid.length() > 31)
-  {
-    apSsid = apSsid.substring(0, 31);
-  }
+  char apSsid[32];
+  snprintf(apSsid, sizeof(apSsid), "%s%s", AP_SSID_PREFIX, base.c_str());
 
-  WiFi.softAP(apSsid.c_str(), "saltmeadow");
+  WiFi.softAP(apSsid, AP_PASSWORD);
 
   Serial.print("AP SSID: ");
   Serial.println(apSsid);
