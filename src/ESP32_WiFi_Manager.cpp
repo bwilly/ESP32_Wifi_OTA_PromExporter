@@ -88,17 +88,12 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 // #include <AsyncTelnetSerial.h>
 #include <AsyncTCP.h> // dependency for the async streams
 
-<<<<<<< HEAD
-// #include <BufferedLogger.h>
-#include "TelnetBridge.h"
-=======
-#include <BufferedLogger.h>
-#include "TelnetBridge.h" // stopped using this due to comppile conflcot in nov'25. would liek its feature returned for remote log monitor.
+
+//#include "TelnetBridge.h" // stopped using this due to comppile conflcot in nov'25. would liek its feature returned for remote log monitor.
 
 #include "ConfigModel.h"
 #include "ConfigStorage.h"
 
->>>>>>> d9d3f10 (compiles but mqtt might not be effective)
 
 #include "Logger.h"
 
@@ -110,7 +105,7 @@ Logger logger;
 
 // ---- Remote debug configuration ----
 constexpr uint16_t SRL_TELNET_PORT = 23;
-constexpr const char* SRL_TELNET_PASSWORD = "pw1234";
+constexpr const char* SRL_TELNET_PASSWORD = "saltmeadow";
 
 
 // no good reason for these to be directives
@@ -938,8 +933,8 @@ void setupStationMode()
   // telnetSerial.begin(115200, true, false);
 
   // start our async Telnet server
-  initTelnetServer();
-  logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
+  // initTelnetServer();
+  // logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
 
   logger.log("initDNS...\n");
   initDNS();
