@@ -56,11 +56,7 @@ extern String pinAcs;
 extern String mqttServer;
 extern String mqttPort;
 extern bool w1Enabled;
-extern bool dhtEnabled;
-extern bool mqttEnabled;
-extern bool acs712Enabled;
-extern bool cht832xEnabled;
-extern bool sctEnabled;
+
 
 extern String mainDelay;
 extern uint8_t w1Address[6][8]; // todo:remove post refactor

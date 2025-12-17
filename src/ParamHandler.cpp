@@ -277,17 +277,17 @@ void handlePostParameters(AsyncWebServerRequest *request)
                 }
             }
         }
-        else if (paramMetadata.type == ParamMetadata::BOOLEAN)
-        {
-            Serial.print("Saving param: ");
-            Serial.println(paramMetadata.name);
+        // else if (paramMetadata.type == ParamMetadata::BOOLEAN)
+        // {
+        //     Serial.print("Saving param: ");
+        //     Serial.println(paramMetadata.name);
 
-            // Checkboxes are a special case. If the parameter is not found, it means the checkbox was not checked.
-            bool isChecked = paramFound && request->getParam(paramMetadata.name.c_str(), true)->value() == "on";
-            // bool isChecked = request->getParam(paramMetadata.name.c_str(), true)->value() == "on";
-            *(paramToBoolMap[paramMetadata.name]) = isChecked;
-            writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), isChecked ? "true" : "false");
-        }
+        //     // Checkboxes are a special case. If the parameter is not found, it means the checkbox was not checked.
+        //     bool isChecked = paramFound && request->getParam(paramMetadata.name.c_str(), true)->value() == "on";
+        //     // bool isChecked = request->getParam(paramMetadata.name.c_str(), true)->value() == "on";
+        //     *(paramToBoolMap[paramMetadata.name]) = isChecked;
+        //     writeFile(SPIFFS, paramMetadata.spiffsPath.c_str(), isChecked ? "true" : "false");
+        // }
 
         else
         {

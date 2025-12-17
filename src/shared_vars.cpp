@@ -49,11 +49,11 @@ String pinAcs;
 String mqttServer;
 String mqttPort;
 bool w1Enabled;
-bool dhtEnabled;
-bool acs712Enabled;
-bool sctEnabled;
-bool cht832xEnabled;
-bool mqttEnabled;
+
+
+
+
+
 String mainDelay;
 uint8_t w1Address[6][8]; // accounted for in ParamHandler.cpp todo:workingHere: it was until my refactor. i bet now it doesn't work yet anymore Dec2, 2023. Yes me, i'd be correct. Nov11'24
 String w1Name[6];        // todo:remove this and above after refactor Nov8'24
@@ -77,13 +77,13 @@ std::map<String, String *> paramToVariableMap = {
 
 };
 
-std::map<String, bool *> paramToBoolMap = {
-    {"enableW1", &w1Enabled},
-    {"enableDHT", &dhtEnabled},
-    {"enableAcs712", &acs712Enabled},
-    {"enableMQTT", &mqttEnabled},
-    {"enableCHT832x", &cht832xEnabled},
-    {"enableSct", &sctEnabled}
-};
+// std::map<String, bool *> paramToBoolMap = {
+//     {"enableW1", &w1Enabled},
+//     {"enableDHT", &dhtEnabled},
+//     {"enableAcs712", &acs712Enabled},
+//     {"enableMQTT", &mqttEnabled},
+//     {"enableCHT832x", &cht832xEnabled},
+//     {"enableSct", &sctEnabled}
+// };
 
 SensorGroupW1 w1Sensors;

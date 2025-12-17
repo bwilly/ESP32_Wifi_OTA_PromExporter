@@ -947,25 +947,26 @@ void setupStationMode()
   initZabbixServer();
 
   // @pattern
-  bool dhtEnabledValue = *(paramToBoolMap["enableDHT"]);
-  if (dhtEnabledValue)
-  {
-    initSensorTask(); // dht
-  }
-  if (acs712Enabled)
+if (gConfig.sensors.dht.enabled)
+{
+  logger.log("DHT: enabled via gConfig, starting sensor task\n");
+  initSensorTask();
+}
+
+  if (gConfig.sensors.acs.enabled)
   {
     setupACS712();
   }
 
   // I2C pins for CHT832x
   Wire.begin(32, 33); // todo:externalize: why is this here instead of inside the instantiation of the CHT sensor? Dec6'25 
-  if (cht832xEnabled)
+  if (gConfig.sensors.cht.enabled)
   {
     envSensor.begin();
   }
 
   
-  if(sctEnabled) {
+  if(gConfig.sensors.sct.enabled) {
     sctSensor.begin();
   }
 
@@ -1514,7 +1515,7 @@ void loop()
     mqClient.loop();
 
     // @anti-pattern as compared to dhtEnabledValue? Maybe this is the bettr way and the dhtEnabledValue was mean for checkbox population? Mar4'25
-    if (dhtEnabled)
+    if (gConfig.sensors.dht.enabled)
     {
       float currentTemperature = readDHTTemperature();
       float currentHumidity = readDHTHumidity();
@@ -1530,7 +1531,7 @@ void loop()
     }
 
     // Dec3'25
-    if (cht832xEnabled)
+    if (gConfig.sensors.cht.enabled)
     {
       float chtTemp = NAN;
       float chtHum = NAN;
@@ -1552,7 +1553,7 @@ void loop()
       }
     } 
 
-    if(sctEnabled) {
+    if(gConfig.sensors.sct.enabled) {
           float amps = sctSensor.readCurrentACRms();
           logger.logf("iot.sct.current %.3fA pin=%d rated=%.0f\n",
             amps, PIN_SCT, SCT_RATED_AMPS);        
@@ -1560,7 +1561,7 @@ void loop()
     }
   }
 
-if (sctEnabled)
+if (gConfig.sensors.sct.enabled)
 {
     float amps = fabsf(sctSensor.readCurrentACRms());
 
@@ -1584,7 +1585,7 @@ if (sctEnabled)
 
 
 
-  if (w1Enabled)
+  if (gConfig.sensors.w1.enabled)
   {
     temptSensor.requestTemperatures();
     TemperatureReading *readings = temptSensor.getTemperatureReadings(); // todo:performance: move declaration outside of the esp loop
@@ -1599,7 +1600,7 @@ if (sctEnabled)
     }
   }
 
-  if (acs712Enabled)
+  if (gConfig.sensors.acs.enabled)
   {
     float amps = fabs(readACS712Current());
     logger.log(amps);

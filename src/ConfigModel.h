@@ -40,6 +40,12 @@ struct DhtConfig {
     int  pin     = 23;    // default GPIO
 };
 
+struct Cht832xConfig {
+    bool enabled = false;
+    // int  pin     = 23;    // using 32 and 33 but #todo need to externalize
+};
+
+
 // DS18B20 / 1-Wire configuration
 struct W1Config {
     bool enabled = false;
@@ -53,11 +59,19 @@ struct Acs712Config {
     float onThresholdAmps = 1.75f;  // amps for "pump ON"
 };
 
+struct Sct013Config {
+    bool  enabled         = false;
+    // int   pin             = 36;     // ADC pin
+    // float onThresholdAmps = 1.75f;  // amps for "pump ON"
+};
+
 // Aggregated sensors config
 struct SensorsConfig {
     DhtConfig    dht;
     W1Config     w1;
-    Acs712Config acs712;
+    Acs712Config acs;
+    Cht832xConfig cht;
+    Sct013Config sct;
 };
 
 // Timing and intervals

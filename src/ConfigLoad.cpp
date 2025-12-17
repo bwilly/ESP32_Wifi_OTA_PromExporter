@@ -97,43 +97,43 @@ static bool applyConfigJsonDoc(JsonDocument &doc)
     }
 
     // 2) Bool params (enableW1, enableDHT, enableAcs712, enableMQTT, etc.)
-    for (auto &entry : paramToBoolMap) {
-        const String &key   = entry.first;
-        bool         *value = entry.second;
+    // for (auto &entry : paramToBoolMap) {
+    //     const String &key   = entry.first;
+    //     bool         *value = entry.second;
 
-        if (!value) {
-            logger.log("ConfigLoad: bool param '" + key + "' has null target pointer\n");
-            continue;
-        }
+    //     if (!value) {
+    //         logger.log("ConfigLoad: bool param '" + key + "' has null target pointer\n");
+    //         continue;
+    //     }
 
-        if (!doc.containsKey(key)) {
-            logger.log("ConfigLoad: bool param '" + key + "' not present in JSON\n");
-            continue;
-        }
+    //     if (!doc.containsKey(key)) {
+    //         logger.log("ConfigLoad: bool param '" + key + "' not present in JSON\n");
+    //         continue;
+    //     }
 
-        JsonVariant v = doc[key];
-        if (v.isNull()) {
-            logger.log("ConfigLoad: bool param '" + key + "' present but null\n");
-            continue;
-        }
+    //     JsonVariant v = doc[key];
+    //     if (v.isNull()) {
+    //         logger.log("ConfigLoad: bool param '" + key + "' present but null\n");
+    //         continue;
+    //     }
 
-        bool result = *value;  // default to existing
+    //     bool result = *value;  // default to existing
 
-        if (v.is<bool>()) {
-            result = v.as<bool>();
-        } else if (v.is<long>() || v.is<double>()) {
-            result = (v.as<long>() != 0);
-        } else if (v.is<const char*>()) {
-            String s = v.as<const char*>();
-            s.toLowerCase();
-            result = (s == "1" || s == "true" || s == "yes" || s == "on");
-        } else {
-            logger.log("ConfigLoad: bool param '" + key + "' has unsupported JSON type; leaving existing value\n");
-        }
+    //     if (v.is<bool>()) {
+    //         result = v.as<bool>();
+    //     } else if (v.is<long>() || v.is<double>()) {
+    //         result = (v.as<long>() != 0);
+    //     } else if (v.is<const char*>()) {
+    //         String s = v.as<const char*>();
+    //         s.toLowerCase();
+    //         result = (s == "1" || s == "true" || s == "yes" || s == "on");
+    //     } else {
+    //         logger.log("ConfigLoad: bool param '" + key + "' has unsupported JSON type; leaving existing value\n");
+    //     }
 
-        *value = result;
-        logger.log("ConfigLoad: applied bool param '" + key + "' = " + String(*value ? "true\n" : "false\n"));
-    }
+    //     *value = result;
+    //     logger.log("ConfigLoad: applied bool param '" + key + "' = " + String(*value ? "true\n" : "false\n"));
+    // }
 
     // 3) W1 sensors from w1-1 / w1-1-name ... w1-6
     for (int i = 0; i < 6; ++i) {

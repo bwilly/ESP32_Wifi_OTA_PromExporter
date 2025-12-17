@@ -49,13 +49,13 @@ void loadPersistedValues()
         //     }
         // }
         // Convert value to a boolean and assign it to the appropriate global variable
-        else if (param.type == ParamMetadata::BOOLEAN)
-        {
-            if (paramToBoolMap.find(param.name) != paramToBoolMap.end())
-            {
-                *(paramToBoolMap[param.name]) = (value == "true");
-            }
-        }
+        // else if (param.type == ParamMetadata::BOOLEAN)
+        // {
+        //     if (paramToBoolMap.find(param.name) != paramToBoolMap.end())
+        //     {
+        //         *(paramToBoolMap[param.name]) = (value == "true");
+        //     }
+        // }
     }
 }
 

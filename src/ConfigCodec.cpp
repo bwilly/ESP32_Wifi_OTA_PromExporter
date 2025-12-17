@@ -104,13 +104,13 @@ static void sensorsFromJson(JsonObject obj, SensorsConfig &sc) {
     if (obj.containsKey("acs712")) {
         JsonObject a = obj["acs712"].as<JsonObject>();
         if (a.containsKey("enabled")) {
-            sc.acs712.enabled = a["enabled"].as<bool>();
+            sc.acs.enabled = a["enabled"].as<bool>();
         }
         if (a.containsKey("pin")) {
-            sc.acs712.pin = a["pin"].as<int>();
+            sc.acs.pin = a["pin"].as<int>();
         }
         if (a.containsKey("onThresholdAmps")) {
-            sc.acs712.onThresholdAmps = a["onThresholdAmps"].as<float>();
+            sc.acs.onThresholdAmps = a["onThresholdAmps"].as<float>();
         }
     }
 }
@@ -125,9 +125,9 @@ static void sensorsToJson(const SensorsConfig &sc, JsonObject obj) {
     w1["busPin"]  = sc.w1.busPin;
 
     JsonObject a  = obj.createNestedObject("acs712");
-    a["enabled"]         = sc.acs712.enabled;
-    a["pin"]             = sc.acs712.pin;
-    a["onThresholdAmps"] = sc.acs712.onThresholdAmps;
+    a["enabled"]         = sc.acs.enabled;
+    a["pin"]             = sc.acs.pin;
+    a["onThresholdAmps"] = sc.acs.onThresholdAmps;
 }
 
 static void timingFromJson(JsonObject obj, TimingConfig &tc) {

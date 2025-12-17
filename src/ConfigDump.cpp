@@ -49,16 +49,16 @@ String buildEffectiveConfigJson()
     }
 
     // 2) All bool params (enableW1, enableDHT, enableAcs712, enableMQTT, etc.)
-    for (auto &entry : paramToBoolMap) {
-        const String &key   = entry.first;
-        bool         *value = entry.second;
+    // for (auto &entry : paramToBoolMap) {
+    //     const String &key   = entry.first;
+    //     bool         *value = entry.second;
 
-        if (!value) {
-            continue;
-        }
+    //     if (!value) {
+    //         continue;
+    //     }
 
-        doc[key] = *value;
-    }
+    //     doc[key] = *value;
+    // }
 
     // 3) W1 sensor hex + names → flat keys: w1-1, w1-1-name, ... w1-6, w1-6-name
     for (int i = 0; i < 6; ++i) {
