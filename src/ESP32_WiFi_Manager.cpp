@@ -129,7 +129,7 @@ static StaticJsonDocument<REMOTE_JSON_CAPACITY> g_remoteTmpDoc;
 // String version = String(APP_VERSION) + "::" + APP_COMMIT_HASH + ":: TelnetBridge-removed";
 String version = String(APP_VERSION) + "::" +
                  APP_COMMIT_HASH + "::" +
-                 APP_BUILD_DATE + ":: TelnetBridge-removed";
+                 APP_BUILD_DATE + ":: TelnetBridge-backAgain";
 
 // trying to identify cause of unreliable dht22 readings
 
