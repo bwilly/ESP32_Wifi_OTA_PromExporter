@@ -3,9 +3,10 @@
 
 
 #include "CHT832xSensor.h"
-#include "BufferedLogger.h"   // your existing logger type
+// #include "BufferedLogger.h"   // your existing logger type
+#include <shared_vars.h>
 
-extern BufferedLogger logger;
+// extern BufferedLogger logger;
 
 CHT832xSensor::CHT832xSensor(uint8_t i2cAddress)
     : _addr(i2cAddress), _wire(&Wire)

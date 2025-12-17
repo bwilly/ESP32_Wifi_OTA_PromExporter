@@ -6,7 +6,7 @@
 #include "TelnetBridge.h"   // for broadcastTelnet()
 
 // Define global instance
-BufferedLogger logger;
+// BufferedLogger logger;
 
 void BufferedLogger::vlog(const char* fmt, va_list ap) {
   char tmp[256];

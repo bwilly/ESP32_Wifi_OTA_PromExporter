@@ -9,6 +9,10 @@
 #include "ParamMetadata.h"
 using namespace std;
 
+#include "Logger.h"
+extern Logger logger;
+
+
 // Search for parameter in HTTP POST request
 extern const char *PARAM_WIFI_SSID; // = "ssid";
 extern const char *PARAM_WIFI_PASS; // = "pass";

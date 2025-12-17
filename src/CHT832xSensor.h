@@ -9,8 +9,8 @@
 #include <Wire.h>
 
 // Forward-declare your logger so the driver can log like ACS
-class BufferedLogger;
-extern BufferedLogger logger;
+// class BufferedLogger;
+// extern BufferedLogger logger;
 
 /**
  * OO driver for CHT832x / SHT3x-style I2C temp/RH sensor.

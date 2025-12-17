@@ -3,7 +3,7 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include "shared_vars.h"
-#include <BufferedLogger.h>
+// #include <BufferedLogger.h>
 
 #define DHTTYPE DHT22 // DHT 22 (AM2302)
 

@@ -4,9 +4,10 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Update.h>
-#include <BufferedLogger.h>   // for logger
+#include <shared_vars.h>
+// #include <BufferedLogger.h>   // for logger
 
-extern BufferedLogger logger;
+// extern BufferedLogger logger;
 
 bool performHttpOta(const String &url)
 {

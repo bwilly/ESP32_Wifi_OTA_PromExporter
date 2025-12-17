@@ -4,7 +4,8 @@
 #include "MessagePublisher.h"
 #include <Arduino.h>
 #include <time.h>
-#include <BufferedLogger.h>
+// #include <BufferedLogger.h>
+#include <shared_vars.h>
 
 namespace {
     constexpr char TEMPERATURE_TOPIC[] = "ship/temperature";

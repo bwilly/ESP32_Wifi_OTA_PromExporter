@@ -88,11 +88,21 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 // #include <AsyncTelnetSerial.h>
 #include <AsyncTCP.h> // dependency for the async streams
 
-#include <BufferedLogger.h>
+// #include <BufferedLogger.h>
 #include "TelnetBridge.h"
+
+#include "Logger.h"
+
+Logger logger;
 
 // extern AsyncTelnetSerial telnetSerial;
 // static AsyncTelnetSerial telnetSerial(&Serial);
+
+
+// ---- Remote debug configuration ----
+constexpr uint16_t SRL_TELNET_PORT = 23;
+constexpr const char* SRL_TELNET_PASSWORD = "pw1234";
+
 
 // no good reason for these to be directives
 #define MDNS_DEVICE_NAME "sesp-"
@@ -821,10 +831,14 @@ void setup()
   // Decide which path: Station vs AP
   if (initWiFi()) // Station Mode
   {
+    logger.begin(locationName.c_str(), SRL_TELNET_PASSWORD, SRL_TELNET_PORT, 64, 192);
+  logger.log("boot\n");
     setupStationMode();
   }
   else
   {
+    logger.begin(locationName.c_str(), SRL_TELNET_PASSWORD, SRL_TELNET_PORT, 64, 192);
+  logger.log("boot\n");
     setupAccessPointMode();
   }
 }
@@ -1419,6 +1433,9 @@ void maybePublishEnvToMqtt(
 void loop()
 {
   unsigned long currentMillis = millis();
+
+  logger.handle();
+  logger.flush(16);
 
   // Defered OTA execution from main loop (not async_tcp task)
   if (g_otaRequested)

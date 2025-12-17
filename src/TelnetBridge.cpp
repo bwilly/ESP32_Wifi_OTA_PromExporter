@@ -1,6 +1,7 @@
 #include "TelnetBridge.h"
-#include "BufferedLogger.h"
-extern BufferedLogger logger;
+// #include "BufferedLogger.h"
+// extern BufferedLogger logger;
+#include <shared_vars.h>
 
 static AsyncServer telnetServer(23);
 static AsyncClient* telnetClient = nullptr;
@@ -32,7 +33,7 @@ void initTelnetServer() {
     }
     telnetClient = client;
     // replay buffer now that we have a client:
-    logger.dumpBufferTo(broadcastTelnet);
+    // logger.dumpBufferTo(broadcastTelnet);
 
     telnetClient->onDisconnect([](void*, AsyncClient* c){
       telnetClient = nullptr;
