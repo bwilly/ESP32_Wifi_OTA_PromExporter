@@ -7,6 +7,7 @@
 #include <vector> // Include the vector header
 #include <map>
 #include "ParamMetadata.h"
+#include "CHT832xSensor.h"
 using namespace std;
 
 #include "Logger.h"
@@ -44,6 +45,10 @@ extern const char *PARAM_ENABLE_CHT832x;
 extern const char *PARAM_ENABLE_SCT;  
 extern const char *PARAM_ENABLE_MQTT; 
 
+extern volatile bool g_bootstrapPending;
+extern String g_bootstrapBody;
+extern String g_bootstrapErr;
+
 
 // Variables to save values from HTML form
 extern String ssid;
@@ -57,6 +62,9 @@ extern String mqttServer;
 extern String mqttPort;
 extern bool w1Enabled;
 
+
+// CHT832x I2C temperature/humidity sensor (full OO)
+extern CHT832xSensor envSensor;
 
 extern String mainDelay;
 extern uint8_t w1Address[6][8]; // todo:remove post refactor

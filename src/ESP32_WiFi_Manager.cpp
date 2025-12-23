@@ -45,6 +45,9 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include <AsyncTCP.h>
 #include "SPIFFS.h"
 
+#include "WebRoutes.h"
+
+
 #include "ConfigLoad.h"
 #include "ConfigFetch.h"
 
@@ -193,8 +196,8 @@ namespace
 // DHT dht(DHTPIN, DHTTYPE);
 // DHT *dht = nullptr; // global pointer declaration
 
-// CHT832x I2C temperature/humidity sensor (full OO)
-CHT832xSensor envSensor(0x44); // default address; todo: externalize Dec3'25
+// // CHT832x I2C temperature/humidity sensor (full OO)
+// CHT832xSensor envSensor(0x44); // default address; todo: externalize Dec3'25
 
 // SctSensor sctSensor(32, 15.0f);  // default 15A;
 // choose the ADC1 pin you're using (example)
@@ -821,7 +824,59 @@ void populateW1Addresses(uint8_t w1Address[6][8], String w1Name[6], const Sensor
   }
 }
 
-// Entry point
+
+static bool saveBootstrapConfigJson(const String &jsonBody, String &errOut)
+{
+    // 1) Parse JSON (sanity check)
+    StaticJsonDocument<APP_CONFIG_JSON_CAPACITY> doc;
+    DeserializationError err = deserializeJson(doc, jsonBody);
+    if (err) {
+        errOut = String("JSON parse error: ") + err.c_str();
+        return false;
+    }
+
+    // 2) Apply into a temp AppConfig so we can validate without clobbering gConfig
+    AppConfig tmp = gConfig; // start from current defaults
+    JsonObject root = doc.as<JsonObject>();
+    if (!configFromJson(root, tmp)) {
+        errOut = "configFromJson failed";
+        return false;
+    }
+
+    // 3) Minimal bootstrap validation (tweak rules as you like)
+    //    If you want AP bootstrap to ONLY set wifi + identity, keep it strict here.
+    if (tmp.wifi.ssid.isEmpty()) {
+        errOut = "Missing required field: wifi.ssid";
+        return false;
+    }
+    if (tmp.wifi.pass.isEmpty()) {
+        errOut = "Missing required field: wifi.pass";
+        return false;
+    }
+    if (tmp.identity.locationName.isEmpty()) {
+        errOut = "Missing required field: identity.locationName";
+        return false;
+    }
+
+    // Default instance to locationName if omitted
+    if (tmp.identity.instance.isEmpty()) {
+        tmp.identity.instance = tmp.identity.locationName;
+    }
+
+    // 4) Persist to /bootstrap.json in modular format
+if (!ConfigStorage::saveAppConfigToFile("/bootstrap.json", tmp)) {
+    errOut = "Failed to write /bootstrap.json";
+    return false;
+}
+
+// 5) Also update live gConfig (optional but useful for immediate debug endpoints)
+gConfig = tmp;
+
+
+    return true;
+}
+
+
 // Entry point
 void setup()
 {
@@ -840,83 +895,111 @@ void setup()
   if (initWiFi()) // Station Mode
   {
     logger.begin(locationName.c_str(), SRL_TELNET_PASSWORD, SRL_TELNET_PORT, 64, 192);
-  logger.log("boot\n");
+    logger.log("boot\n");
     setupStationMode();
   }
   else
   {
-    logger.begin(locationName.c_str(), SRL_TELNET_PASSWORD, SRL_TELNET_PORT, 64, 192);
-  logger.log("boot\n");
+    // IMPORTANT:
+    // Do NOT start logger.begin() here. It starts a WiFiServer (RemoteDebug) which
+    // requires lwIP/tcpip to be ready. In AP path, that isn't true yet because
+    // softAP hasn't been started.
+    //
+    // Start logger.begin() inside setupAccessPointMode() AFTER WiFi.softAP(...).
+
+    // logger.begin(locationName.c_str(), SRL_TELNET_PASSWORD, SRL_TELNET_PORT, 64, 192);
+    // logger.log("boot\n");
+
     setupAccessPointMode();
   }
 }
+
 
 void setupSpiffsAndConfig()
 {
   Serial.println("initSpiffs...");
   initSPIFFS();
 
-  // Try to load a flat JSON config from /config.json.
-  // If present and valid, it will override the legacy per-param SPIFFS values
-  // that loadPersistedValues() just populated.
+  // 1) Load BOOTSTRAP config first (new source of truth for wifi + identity + base URLs)
+  if (ConfigStorage::loadAppConfigFromFile("/bootstrap.json", gConfig))
+  {
+    logger.log("AppConfig: loaded BOOTSTRAP from /bootstrap.json into gConfig\n");
+  }
+  else
+  {
+    logger.log("AppConfig: no /bootstrap.json (or parse error). Will try legacy bootstrap migration next.\n");
+
+    // 1a) Legacy bootstrap migration path (one-time):
+    // loadPersistedValues() reads /ssid.txt /pass.txt /location.txt /config-url.txt /ota-url.txt
+    // We only migrate *bootstrap keys*.
+    loadPersistedValues();
+
+    // If legacy has at least SSID + PASS + LOCATION, write bootstrap.json
+    // NOTE: This assumes ssid/pass/locationName/configUrl/otaUrl are the legacy globals you already have.
+    if (ssid.length() > 0 && pass.length() > 0 && locationName.length() > 0)
+    {
+      AppConfig tmp = gConfig; // keep defaults
+      tmp.wifi.ssid = ssid;
+      tmp.wifi.pass = pass;
+
+      tmp.identity.locationName = locationName;
+
+      // Default instance to locationName (your rule)
+      if (tmp.identity.instance.isEmpty()) {
+        tmp.identity.instance = tmp.identity.locationName;
+      }
+
+      // If you have these in legacy:
+      // configUrl = "http://salt-r420:9080/esp-config/salt"
+      // otaUrl    = "http://.../firmware.bin"
+      if (configUrl.length() > 0) {
+        tmp.remote.configBaseUrl = configUrl;
+      }
+      if (otaUrl.length() > 0) {
+        tmp.remote.otaUrl = otaUrl;
+      }
+
+      if (ConfigStorage::saveAppConfigToFile("/bootstrap.json", tmp))
+      {
+        logger.log("AppConfig: migrated legacy bootstrap params -> /bootstrap.json\n");
+        gConfig = tmp;
+      }
+      else
+      {
+        logger.log("AppConfig: FAILED to write /bootstrap.json during legacy migration\n");
+      }
+    }
+    else
+    {
+      logger.log("AppConfig: legacy bootstrap values incomplete; staying unconfigured (AP mode expected)\n");
+    }
+  }
+
+  // 2) Apply bootstrap values into your legacy globals that initWiFi() expects
+  // (You can delete these legacy globals later, but for now keep it explicit)
+  ssid = gConfig.wifi.ssid;
+  pass = gConfig.wifi.pass;
+  locationName = gConfig.identity.locationName;
+
+  // configUrl in your code is now baseUrl like http://salt-r420:9080/esp-config/salt
+  configUrl = gConfig.remote.configBaseUrl;
+
+  // otaUrl legacy string (if still used anywhere)
+  otaUrl = gConfig.remote.otaUrl;
+
+  // 3) Now load the effective runtime cache (mqtt/sensors/pins/etc)
   if (loadEffectiveCacheFromFile(EFFECTIVE_CACHE_PATH))
   {
-    Serial.println("ConfigLoad: EFFECTIVE_CACHE_PATH = '/config.effective.cache.json'loaded and applied (overrides per-param SPIFFS files).");
+    Serial.println("ConfigLoad: EFFECTIVE_CACHE_PATH = '/config.effective.cache.json' loaded and applied (overrides per-param SPIFFS files).");
   }
   else
   {
-    Serial.println("ConfigLoad: no EFFECTIVE_CACHE_PATH = '/config.effective.cache.json' (or parse error); using values from loadPersistedValues() which are the params from UI.");
+    Serial.println("ConfigLoad: no EFFECTIVE_CACHE_PATH = '/config.effective.cache.json' (or parse error); continuing with bootstrap-only config.");
   }
 
-    // NEW: load modular AppConfig from /config.json (if present, new schema)
-  if (ConfigStorage::loadAppConfigFromFile("/config.json", gConfig))
-  {
-    logger.log("AppConfig: loaded from /config.json into gConfig (modular JSON)\n");
-  }
-  else
-  {
-    logger.log("AppConfig: no modular /config.json or parse error; using defaults for gConfig\n");
-  }
-
-
-  // i am commenting out below b/c i don't believe it has purpose (bwilly)
-  // Set GPIO 2 as an OUTPUT
-  // Serial.println("ledPin mode and digitalWrite...");
-  // pinMode(ledPin, OUTPUT);
-  // digitalWrite(ledPin, LOW);
-
-  // const char *w1Paths[3] = {w1_1Path.c_str(), w1_2Path.c_str(), w1_3Path.c_str()};
-  // for (int i = 0; i < 3; i++)
-  // {
-  //   loadW1AddressFromFile(SPIFFS, w1Paths[i], i);
-  // }
-
-  // w1Name[0] = readFile(SPIFFS, w1_1_name_Path.c_str());
-  // w1Name[1] = readFile(SPIFFS, w1_2_name_Path.c_str());
-  // w1Name[2] = readFile(SPIFFS, w1_3_name_Path.c_str());
-
-  // Load parameters from SPIFFS using paramList
-  // replaces commented out code directly above
-  for (const auto &paramMetadata : paramList)
-  { // todo:delete this as legacy code since early json config from dev'25, no?
-    if (paramMetadata.name.startsWith(PARAM_W1_1_NAME)) // just match the first w1 as the delegated loaders will load them all
-    {
-      // loadW1SensorConfigFromFile(SPIFFS, paramMetadata.spiffsPath.c_str(), w1Sensors.sensors);
-      loadW1SensorConfigFromFile(SPIFFS, "/w1Json", w1Sensors); // moved away from coupleing file name of storage to teh paramMetaData. maybe i should use it. nov'24
-
-      // populate the arrays that TemperatureSensor consumes
-      populateW1Addresses(w1Address, w1Name, w1Sensors);
-    }
-    // Add else if blocks here for loading other specific parameter types if needed
-  }
-
-  // ip = readFile(SPIFFS, ipPath);
-  // gateway = readFile(SPIFFS, gatewayPath);
   Serial.println(ssid);
   Serial.println(pass);
   Serial.println(locationName);
-  // Serial.println(ip);
-  // Serial.println(gateway);
 }
 
 void setupStationMode()
@@ -924,21 +1007,6 @@ void setupStationMode()
   // setup: path1 (Station Mode)
 
   tryFetchAndApplyRemoteConfig();
-
-  // Start Telnet stream
-  // TelnetStream.begin();            // start Telnet server on port 23
-  // initTelnet();
-
-  // (B) Start async Telnet-to-Serial forwarding:
-  //     - 115200 is the baudrate to mirror (must match Serial.begin)
-  //     - true  = link Telnet <-> Serial
-  //     - false = don’t publish mDNS name
-
-  // telnetSerial.begin(115200, true, false);
-
-  // start our async Telnet server
-  // initTelnetServer();
-  // logger.logf("Boot: IP=%s\n", WiFi.localIP().toString().c_str());
 
   logger.log("initDNS...\n");
   initDNS();
@@ -950,7 +1018,7 @@ void setupStationMode()
 if (gConfig.sensors.dht.enabled)
 {
   logger.log("DHT: enabled via gConfig, starting sensor task\n");
-  initSensorTask();
+  initSensorTask(gConfig.sensors.dht.pin);
 }
 
   if (gConfig.sensors.acs.enabled)
@@ -970,195 +1038,8 @@ if (gConfig.sensors.dht.enabled)
     sctSensor.begin();
   }
 
-  logger.log("set web root /index.html...\n");
-  // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
-  server.serveStatic("/", SPIFFS, "/");
+registerWebRoutesStation(server);
 
-  // Route to set GPIO state to HIGH
-  server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-      digitalWrite(ledPin, HIGH);
-      request->send(SPIFFS, "/index.html", "text/html", false, processor); });
-
-  // Route to set GPIO state to LOW
-  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-      digitalWrite(ledPin, LOW);
-      request->send(SPIFFS, "/index.html", "text/html", false, processor); });
-
-  // Route to Prometheus Metrics Exporter
-  server.on("/metrics", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/html", readAndGeneratePrometheusExport(locationName.c_str())); });
-
-  server.on("/devicename", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/html", MakeMine(MDNS_DEVICE_NAME)); });
-
-  server.on("/bssid", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/html", WiFi.BSSIDstr()); });
-
-  server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-                  char buffer[32];  // Buffer to hold the string representation of the temperature
-                  float temperature = readDHTTemperature();
-                  snprintf(buffer, sizeof(buffer), "%.2f", temperature);
-                  request->send(200, "text/html", buffer); });
-
-  server.on("/cht/temperature", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-    char buffer[32];
-
-    float chtTemp = NAN;
-    float chtHum  = NAN;
-
-    if (envSensor.read(chtTemp, chtHum)) {
-        snprintf(buffer, sizeof(buffer), "%.2f", chtTemp);
-        request->send(200, "text/html", buffer);
-    } else {
-        request->send(500, "text/plain", "CHT read failed");
-    } });
-
-  server.on("/cht/humidity", HTTP_GET, [](AsyncWebServerRequest *request)
-{
-    char buffer[32];
-
-    float chtTemp = NAN;
-    float chtHum  = NAN;
-
-    if (envSensor.read(chtTemp, chtHum)) {
-        snprintf(buffer, sizeof(buffer), "%.2f", chtHum);
-        request->send(200, "text/html", buffer);
-    } else {
-        request->send(500, "text/plain", "CHT read failed");
-    }
-});
-
-
-  // copy/paste from setup section for AP -- changing URL path
-  // todo: consolidate this copied code
-  server.on("/manage", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
-
-  server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/html", version); });
-
-  server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/html", pinDht); });
-
-  server.on("/onewire", HTTP_GET, [](AsyncWebServerRequest *request)
-            {           
-                String result = printDS18b20();                     
-                request->send(200, "text/html", result); });
-
-  // todo: find out why some readings provide 129 now, and on prev commit, they returned -127 for same bad reading. Now, the method below return -127, but this one is now 129. Odd. Aug19 '23
-  server.on("/onewiretempt", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-              temptSensor.requestTemperatures();
-              TemperatureReading *readings = temptSensor.getTemperatureReadings();
-
-              // Use the readings to send a response, assume SendHTML can handle TemperatureReading array
-              request->send(200, "text/html", SendHTML(readings, MAX_READINGS));
-
-              // sensors.requestTemperatures();
-              // request->send(200, "text/html", SendHTML(sensors.getTempC(w1Address[0]), sensors.getTempC(w1Address[1]), sensors.getTempC(w1Address[2]))); });
-              // request->send(200, "text/html", SendHTMLxxx());
-            });
-
-  // todo: find out why some readings provide -127
-  server.on("/onewiremetrics", HTTP_GET, [](AsyncWebServerRequest *request)
-            {           
-                // sensors.requestTemperatures();
-                temptSensor.requestTemperatures();
-                TemperatureReading *readings = temptSensor.getTemperatureReadings();
-
-                // TemperatureReading readings[MAX_READINGS] = {
-                //     {w1Name[0].c_str(), sensors.getTempC(w1Address[0])},
-                //     {w1Name[1].c_str(), sensors.getTempC(w1Address[1])},
-                //     {w1Name[2].c_str(), sensors.getTempC(w1Address[2])},
-                //     {} // Ending marker
-                // };
-
-                request->send(200, "text/html", buildPrometheusMultiTemptExport(readings)); });
-
-
-  // View the locally stored working config
-  server.on("/config/effective-cache", HTTP_GET, [](AsyncWebServerRequest *request) {
-    const char *path = EFFECTIVE_CACHE_PATH;
-
-    if (!SPIFFS.exists(path)) {
-        request->send(404, "text/plain", "No effective cache file stored");
-        return;   
-    }
-
-    request->send(SPIFFS, path, "application/json");
-});
-
-  // View the last downloaded remote snapshot: /config-remote.json
-  server.on("/config/remote", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-      const char *path = "/config-remote.json";
-
-      if (!SPIFFS.exists(path)) {
-          request->send(404, "text/plain", "No /config-remote.json stored");
-          return;
-      }
-
-      request->send(SPIFFS, path, "application/json"); });
-
-  server.on("/ota/run", HTTP_GET, [](AsyncWebServerRequest *request)
-            {
-
-      auto it = paramToVariableMap.find("ota-url");
-      if (it == paramToVariableMap.end() || it->second == nullptr) {
-          request->send(400, "text/plain",
-                        "Missing or null 'ota-url' param in config");
-          return;
-      }
-
-      String fwUrl = *(it->second);
-      fwUrl.trim();
-
-      if (fwUrl.length() == 0) {
-          request->send(400, "text/plain",
-                        "Empty 'ota-url' value in config");
-          return;
-      }
-
-      logger.log("OTA: requested via /ota/run, URL = " + fwUrl + "\n");
-
-      // schedule OTA (run in loop() to avoid async_tcp WDT)
-      g_otaUrl = fwUrl;
-      g_otaRequested = true;
-
-      request->send(200, "text/plain",
-                    "OTA scheduled from " + fwUrl +
-                    "\nDevice will reboot if update succeeds."); });
-
-  server.on("/config/cache/clear", HTTP_GET, [](AsyncWebServerRequest *request) {
-    bool ok = clearConfigJsonCache(SPIFFS);
-    if (ok) {
-        request->send(200, "text/plain", "Config JSON cache cleared. It will not be used until remote config repopulates it.");
-    } else {
-        request->send(500, "text/plain", "Failed to clear config JSON cache.");
-    }
-});
-
-server.on("/device/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", "Restarting...");
-    delay(300);   // allow response to flush
-    ESP.restart();
-});
-
-
-  
-                    // note: this is for the post from /manage. whereas, in the setup mode, both form and post are root
-  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-            {
-      handlePostParameters(request);
-      request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
-      delay(mainDelay.toInt()); // delay(3000);
-      ESP.restart(); });
 
   // uses path like server.on("/update")
   // AsyncElegantOTA.begin(&server);
@@ -1241,42 +1122,16 @@ void setupAccessPointMode()
   Serial.print("AP IP address: ");
   Serial.println(IP);
 
+  logger.begin(locationName.c_str(), SRL_TELNET_PASSWORD, SRL_TELNET_PORT, 64, 192);
+  logger.log("boot\n");
+
+
   if (!SPIFFS.begin(true))
   {
     Serial.println("SPIFFS is out of scope per bwilly!");
   }
   // Web Server Root URL
-  Serial.print("Setting web root path to /wifimanager.html...\n");
-
-    server.on("/config/cache/clear", HTTP_GET, [](AsyncWebServerRequest *request) {
-    bool ok = clearConfigJsonCache(SPIFFS);
-    if (ok) {
-        request->send(200, "text/plain", "Config JSON cache cleared. It will not be used until remote config repopulates it.");
-    } else {
-        request->send(500, "text/plain", "Failed to clear config JSON cache.");
-    }
-});
-
-server.on("/device/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", "Restarting...");
-    delay(300);   // allow response to flush
-    ESP.restart();
-});
-
-
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(SPIFFS, "/wifimanager.html", "text/html", false, processor); });
-
-  server.serveStatic("/", SPIFFS, "/"); // for things such as CSS
-
-  Serial.print("Setting root POST and delegating to handlePostParameters...\n");
-  server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
-            {
-      handlePostParameters(request);
-      request->send(200, "text/plain", "Done. ESP will restart, connect to your AP");
-      delay(3000);
-      logger.log("Updated. Now restarting...\n");
-      ESP.restart(); });
+registerWebRoutesAp(server);
 
   logger.log("Starting web server...\n");
   server.begin();
@@ -1452,6 +1307,25 @@ void loop()
 
   logger.handle();
   logger.flush(16);
+
+  if (g_bootstrapPending) {
+  g_bootstrapPending = false;
+
+  String err;
+  bool ok = saveBootstrapConfigJson(g_bootstrapBody, err);
+
+  if (ok) {
+    logger.log("Bootstrap: saved /config.json; rebooting\n");
+     logger.handle();
+  logger.flush(16);
+    delay(200);
+    ESP.restart();
+  } else {
+    logger.log("Bootstrap: rejected: " + err + "\n");
+    // optionally keep running AP mode so you can retry
+  }
+}
+
 
   // Defered OTA execution from main loop (not async_tcp task)
   if (g_otaRequested)

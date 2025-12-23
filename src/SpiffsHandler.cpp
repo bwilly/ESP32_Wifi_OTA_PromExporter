@@ -10,23 +10,7 @@ String makePath(const char *param)
     return String("/") + param + ".txt";
 }
 
-// // For SPIFFS
-// String ssidPath = makePath(PARAM_WIFI_SSID);
-// String passPath = makePath(PARAM_WIFI_PASS);
-// String locationNamePath = makePath(PARAM_LOCATION);
-// String pinDhtPath = makePath(PARAM_PIN_DHT);
-// String mqttServerPath = makePath(PARAM_MQTT_SERVER);
-// String mqttPortPath = makePath(PARAM_MQTT_PORT);
-// String mainDelayPath = makePath(PARAM_MAIN_DELAY);
-// String w1_1Path = makePath(PARAM_W1_1);
-// String w1_2Path = makePath(PARAM_W1_2);
-// String w1_3Path = makePath(PARAM_W1_3);
-// String w1_1_name_Path = makePath(PARAM_W1_1_NAME);
-// String w1_2_name_Path = makePath(PARAM_W1_2_NAME);
-// String w1_3_name_Path = makePath(PARAM_W1_3_NAME);
-// String enableW1Path = makePath(PARAM_ENABLE_W1);
-// String enableDHTPath = makePath(PARAM_ENABLE_DHT);
-// String enableMQTTPath = makePath(PARAM_ENABLE_MQTT);
+
 
 void loadPersistedValues()
 {
@@ -42,20 +26,7 @@ void loadPersistedValues()
                 *(paramToVariableMap[param.name]) = value;
             }
         }
-        // // Convert value to a number and assign it to the appropriate global variable
-        // else if (param.type == ParamMetadata::NUMBER) {
-        //     if (paramToIntMap.find(param.name) != paramToIntMap.end()) {
-        //         *(paramToIntMap[param.name]) = value.toInt();
-        //     }
-        // }
-        // Convert value to a boolean and assign it to the appropriate global variable
-        // else if (param.type == ParamMetadata::BOOLEAN)
-        // {
-        //     if (paramToBoolMap.find(param.name) != paramToBoolMap.end())
-        //     {
-        //         *(paramToBoolMap[param.name]) = (value == "true");
-        //     }
-        // }
+
     }
 }
 
