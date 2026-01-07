@@ -13,6 +13,8 @@ using namespace std;
 #include "Logger.h"
 extern Logger logger;
 
+#include "DeviceIdentity.h"
+extern DeviceIdentity gIdentity;
 
 // Search for parameter in HTTP POST request
 extern const char *PARAM_WIFI_SSID; // = "ssid";

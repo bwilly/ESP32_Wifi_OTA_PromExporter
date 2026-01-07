@@ -98,6 +98,8 @@ With ability to map DSB ID to a name, such as raw water in, post air cooler, pos
 #include "ConfigStorage.h"
 
 
+#include "DeviceIdentity.h"
+
 #include "Logger.h"
 
 Logger logger;
@@ -289,17 +291,17 @@ void onOTAStart()
 }
 
 /* Append a semi-unique id to the name template */
-char *MakeMine(const char *NameTemplate)
-{
-  // uint16_t uChipId = GetDeviceId();
-  // String Result = String(NameTemplate) + String(uChipId, HEX);
-  String Result = String(NameTemplate) + String(locationName);
+// char *MakeMine(const char *NameTemplate)
+// {
+//   // uint16_t uChipId = GetDeviceId();
+//   // String Result = String(NameTemplate) + String(uChipId, HEX);
+//   String Result = String(NameTemplate) + String(locationName);
 
-  char *tab2 = new char[Result.length() + 1];
-  strcpy(tab2, Result.c_str());
+//   char *tab2 = new char[Result.length() + 1];
+//   strcpy(tab2, Result.c_str());
 
-  return tab2;
-}
+//   return tab2;
+// }
 
 // Function to handle Zabbix agent.ping
 void handleZabbixPing(AsyncWebServerRequest *request)
@@ -341,7 +343,7 @@ void handleAvailableMemory(AsyncWebServerRequest *request)
 // Function to handle agent.hostname
 void handleHostName(AsyncWebServerRequest *request)
 {
-  request->send(200, "text/plain", MakeMine(MDNS_DEVICE_NAME));
+  request->send(200, "text/plain", gIdentity.name());
 }
 
 // Function to handle zabbix.agent.availability
@@ -606,14 +608,14 @@ bool initWiFi()
   WiFi.disconnect(true);
   // delay(180);
   // Set custom hostname
-  if (!WiFi.setHostname(MakeMine(MDNS_DEVICE_NAME)))
+  if (!WiFi.setHostname(gIdentity.name()))
   {
     Serial.println("Error setting hostname");
   }
   else
   {
     Serial.print("Setting DNS hostname to: ");
-    Serial.println(MakeMine(MDNS_DEVICE_NAME));
+    Serial.println(gIdentity.name());
   }
   WiFi.mode(WIFI_STA);
 
@@ -680,17 +682,18 @@ bool initWiFi()
   return true;
 }
 
+
 void AdvertiseServices()
 {
   Serial.println("AdvertiseServices on mDNS...");
-  char *MyName = MakeMine(MDNS_DEVICE_NAME);
-  if (MDNS.begin(MyName))
+  const char* myName = gIdentity.name();
+
+  if (MDNS.begin(myName))
   {
     Serial.println(F("mDNS responder started"));
     Serial.print(F("I am: "));
-    Serial.println(MyName);
+    Serial.println(myName);
 
-    // Add service to MDNS-SD
     MDNS.addService(SERVICE_NAME, SERVICE_PROTOCOL, SERVICE_PORT);
   }
   else
@@ -702,6 +705,7 @@ void AdvertiseServices()
     }
   }
 }
+
 
 bool initDNS()
 {
@@ -980,6 +984,10 @@ void setupSpiffsAndConfig()
   ssid = gConfig.wifi.ssid;
   pass = gConfig.wifi.pass;
   locationName = gConfig.identity.locationName;
+  
+  gIdentity.init(MDNS_DEVICE_NAME, gConfig.identity.locationName);
+
+
 
   // configUrl in your code is now baseUrl like http://salt-r420:9080/esp-config/salt
   configUrl = gConfig.remote.configBaseUrl;
@@ -1139,11 +1147,12 @@ registerWebRoutesAp(server);
 
 void reconnectMQ()
 {
-  // while (!mqClient.connected() && (WiFi.getMode() == WIFI_AP))
+  const char* clientId = gIdentity.name();
+
   while (!mqClient.connected())
   {
     logger.log("Attempting MQTT connection...");
-    if (mqClient.connect(MakeMine(MDNS_DEVICE_NAME)))
+    if (mqClient.connect(clientId))
     {
       logger.log("connected\n");
     }
@@ -1156,6 +1165,7 @@ void reconnectMQ()
     }
   }
 }
+
 
 void publishSimpleMessage()
 {

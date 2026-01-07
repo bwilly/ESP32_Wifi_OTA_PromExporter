@@ -5,6 +5,11 @@
 #include <map>
 
 
+#include "shared_vars.h"
+
+DeviceIdentity gIdentity;
+
+
 volatile bool g_bootstrapPending = false;
 String g_bootstrapBody;
 String g_bootstrapErr;
@@ -54,7 +59,6 @@ String otaUrl;
 // String mqttServer;
 // String mqttPort;
 // bool w1Enabled;
-
 
 
 
